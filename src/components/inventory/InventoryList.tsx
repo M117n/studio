@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Edit, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface InventoryItem {
   id: string;
@@ -20,6 +21,8 @@ interface InventoryListProps {
   onEditItem: (id: string, updatedItem: Omit<InventoryItem, "id">) => void;
 }
 
+const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces"];
+
 export const InventoryList: React.FC<InventoryListProps> = ({
   inventory,
   onDeleteItem,
@@ -28,7 +31,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
   const [editedQuantity, setEditedQuantity] = useState<number | "">("");
-  const [editedUnit, setEditedUnit] = useState("");
+  const [editedUnit, setEditedUnit] = useState(unitOptions[0]);
 
   const startEditing = (item: InventoryItem) => {
     setEditingId(item.id);
@@ -116,11 +119,18 @@ export const InventoryList: React.FC<InventoryListProps> = ({
               </TableCell>
               <TableCell>
                 {editingId === item.id ? (
-                  <Input
-                    type="text"
-                    value={editedUnit}
-                    onChange={(e) => setEditedUnit(e.target.value)}
-                  />
+                   <Select onValueChange={setEditedUnit} defaultValue={editedUnit}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select a unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {unitOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                 ) : (
                   item.unit
                 )}

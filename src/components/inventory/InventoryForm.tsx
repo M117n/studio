@@ -5,17 +5,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface InventoryFormProps {
   onAddItem: (item: { name: string; quantity: number; unit: string }) => void;
 }
+
+const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces"];
 
 export const InventoryForm: React.FC<InventoryFormProps> = ({
   onAddItem,
 }) => {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState<number | "">("");
-  const [unit, setUnit] = useState("");
+  const [unit, setUnit] = useState(unitOptions[0]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -40,7 +43,7 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
     onAddItem({ name, quantity, unit });
     setName("");
     setQuantity("");
-    setUnit("");
+    setUnit(unitOptions[0]);
     toast({
       title: "Item Added",
       description: `Added ${quantity} ${unit} of ${name} to inventory.`,
@@ -73,13 +76,18 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
       </div>
       <div>
         <Label htmlFor="unit">Unit</Label>
-        <Input
-          type="text"
-          id="unit"
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          placeholder="Unit of Measure"
-        />
+        <Select onValueChange={setUnit} defaultValue={unit}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select a unit" />
+          </SelectTrigger>
+          <SelectContent>
+            {unitOptions.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <Button type="submit">Add Item</Button>
     </form>

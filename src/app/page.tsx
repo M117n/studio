@@ -8,6 +8,7 @@ import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 
 interface InventoryItem {
   id: string;
@@ -105,7 +106,7 @@ export default function Home() {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">StockWatch AI</h1>
 
-      <Tabs defaultvalue="inventory" className="w-full space-y-4">
+      <Tabs defaultValue="inventory" className="w-full space-y-4">
         <TabsList>
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
           <TabsTrigger value="add">Add Item</TabsTrigger>
@@ -115,8 +116,13 @@ export default function Home() {
         </TabsList>
         <TabsContent value="inventory">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex justify-between items-center">
               <CardTitle>Current Inventory</CardTitle>
+               {previousStates.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={restorePreviousState}>
+                    Restore Previous State
+                  </Button>
+                )}
             </CardHeader>
             <CardContent>
               <InventoryList
@@ -144,14 +150,6 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <ChangeLog changeLog={changeLog} />
-              {previousStates.length > 0 && (
-                <button
-                  className="bg-accent text-white p-2 rounded"
-                  onClick={restorePreviousState}
-                >
-                  Restore Previous State
-                </button>
-              )}
             </CardContent>
           </Card>
         </TabsContent>
