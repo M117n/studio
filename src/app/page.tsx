@@ -45,14 +45,31 @@ export default function Home() {
   }, [changeLog]);
 
   const addItem = (item: Omit<InventoryItem, "id">) => {
-    const newItem: InventoryItem = { ...item, id: crypto.randomUUID() };
-    setInventory([...inventory, newItem]);
-    setChangeLog([
-      ...changeLog,
-      `${new Date().toLocaleString()} - Added ${item.quantity} ${
-        item.unit
-      } of ${item.name}`,
-    ]);
+    const existingItemIndex = inventory.findIndex(
+      (inventoryItem) => inventoryItem.name === item.name && inventoryItem.unit === item.unit
+    );
+
+    if (existingItemIndex > -1) {
+      const updatedInventory = [...inventory];
+      updatedInventory[existingItemIndex].quantity += item.quantity;
+      setInventory(updatedInventory);
+
+      setChangeLog([
+        ...changeLog,
+        `${new Date().toLocaleString()} - Added ${item.quantity} ${
+          item.unit
+        } to existing item ${item.name}`,
+      ]);
+    } else {
+      const newItem: InventoryItem = { ...item, id: crypto.randomUUID() };
+      setInventory([...inventory, newItem]);
+      setChangeLog([
+        ...changeLog,
+        `${new Date().toLocaleString()} - Added ${item.quantity} ${
+          item.unit
+        } of ${item.name}`,
+      ]);
+    }
     setPreviousStates([...previousStates, inventory]);
   };
 
