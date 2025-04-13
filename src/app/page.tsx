@@ -9,6 +9,9 @@ import { ImageToInventory } from "@/components/inventory/ImageToInventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
+import { Label } from "@/components/ui/label";
 
 interface InventoryItem {
   id: string;
@@ -16,6 +19,41 @@ interface InventoryItem {
   quantity: number;
   unit: string;
 }
+
+const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
+
+const convertUnits = (value: number, fromUnit: string, toUnit: string): number | null => {
+  if (fromUnit === toUnit) {
+    return value;
+  }
+
+  // Conversion factors
+  const factors: { [key: string]: { [key: string]: number } } = {
+    "kg": { "g": 1000, "lb": 2.20462, "oz": 35.274 },
+    "g": { "kg": 0.001, "lb": 0.00220462, "oz": 0.035274 },
+    "lb": { "kg": 0.453592, "g": 453.592, "oz": 16 },
+    "oz": { "kg": 0.0283495, "g": 28.3495, "lb": 0.0625 },
+    "L": { "mL": 1000, "gallon (US)": 0.264172, "quart (US)": 1.05669, "pint (US)": 2.11338, "fluid oz (US)": 33.814, "gallon (UK)": 0.219969, "quart (UK)": 0.879877, "pint (UK)": 1.75975, "fluid oz (UK)": 35.1951 },
+    "mL": { "L": 0.001, "gallon (US)": 0.000264172, "quart (US)": 0.00105669, "pint (US)": 0.00211338, "fluid oz (US)": 0.033814, "gallon (UK)": 0.000219969, "quart (UK)": 0.000879877, "pint (UK)": 0.00175975, "fluid oz (UK)": 0.0351951 },
+    "gallon (US)": { "L": 3.78541, "mL": 3785.41, "quart (US)": 4, "pint (US)": 8, "fluid oz (US)": 128 },
+    "quart (US)": { "L": 0.946353, "mL": 946.353, "gallon (US)": 0.25, "pint (US)": 2, "fluid oz (US)": 32 },
+    "pint (US)": { "L": 0.473176, "mL": 473.176, "gallon (US)": 0.125, "quart (US)": 0.5, "fluid oz (US)": 16 },
+    "fluid oz (US)": { "L": 0.0295735, "mL": 29.5735, "gallon (US)": 0.0078125, "quart (US)": 0.03125, "pint (US)": 0.0625 },
+    "gallon (UK)": { "L": 4.54609, "mL": 4546.09, "quart (UK)": 4, "pint (UK)": 8, "fluid oz (UK)": 160 },
+    "quart (UK)": { "L": 1.13652, "mL": 1136.52, "gallon (UK)": 0.25, "pint (UK)": 2, "fluid oz (UK)": 40 },
+    "pint (UK)": { "L": 0.568261, "mL": 568.261, "gallon (UK)": 0.125, "quart (UK)": 0.5, "fluid oz (UK)": 20 },
+    "fluid oz (UK)": { "L": 0.0284131, "mL": 28.4131, "gallon (UK)": 0.00625, "quart (UK)": 0.025, "pint (UK)": 0.05 },
+  };
+
+  if (factors[fromUnit] && factors[fromUnit][toUnit]) {
+    return value * factors[fromUnit][toUnit];
+  }
+
+  // Handle cases where direct conversion is not available (e.g., kg to L)
+  // You might want to add more sophisticated logic here based on the types of units
+  // For now, return null to indicate that conversion is not possible
+  return null;
+};
 
 export default function Home() {
   const [inventory, setInventory] = useState<InventoryItem[]>(() => {
@@ -36,6 +74,13 @@ export default function Home() {
 
   const [previousStates, setPreviousStates] = useState<InventoryItem[][]>([]);
 
+  const [defaultUnit, setDefaultUnit] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("defaultUnit") || "kg";
+    }
+    return "kg";
+  });
+
   useEffect(() => {
     localStorage.setItem("inventory", JSON.stringify(inventory));
   }, [inventory]);
@@ -44,22 +89,36 @@ export default function Home() {
     localStorage.setItem("changeLog", JSON.stringify(changeLog));
   }, [changeLog]);
 
+    useEffect(() => {
+        localStorage.setItem("defaultUnit", defaultUnit);
+    }, [defaultUnit]);
+
   const addItem = (item: Omit<InventoryItem, "id">) => {
     const existingItemIndex = inventory.findIndex(
-      (inventoryItem) => inventoryItem.name === item.name && inventoryItem.unit === item.unit
+      (inventoryItem) => inventoryItem.name === item.name
     );
 
     if (existingItemIndex > -1) {
-      const updatedInventory = [...inventory];
-      updatedInventory[existingItemIndex].quantity += item.quantity;
-      setInventory(updatedInventory);
+      const existingItem = inventory[existingItemIndex];
+      const convertedQuantity = convertUnits(item.quantity, item.unit, existingItem.unit);
 
-      setChangeLog([
-        ...changeLog,
-        `${new Date().toLocaleString()} - Added ${item.quantity} ${
-          item.unit
-        } to existing item ${item.name}`,
-      ]);
+      if (convertedQuantity !== null) {
+        const updatedInventory = [...inventory];
+        updatedInventory[existingItemIndex].quantity += convertedQuantity;
+        setInventory(updatedInventory);
+
+        setChangeLog([
+          ...changeLog,
+          `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} (converted to ${convertedQuantity} ${existingItem.unit}) to existing item ${item.name}`,
+        ]);
+      } else {
+         toast({
+            variant: "destructive",
+            title: "Conversion not possible",
+            description: `Could not convert ${item.unit} to ${existingItem.unit} for ${item.name}.`,
+          });
+        return;
+      }
     } else {
       const newItem: InventoryItem = { ...item, id: crypto.randomUUID() };
       setInventory([...inventory, newItem]);
@@ -89,21 +148,41 @@ export default function Home() {
 
   const editItem = (id: string, updatedItem: Omit<InventoryItem, "id">) => {
     const originalItem = inventory.find((item) => item.id === id);
+    if (!originalItem) {
+      toast({
+        variant: "destructive",
+        title: "Item not found",
+        description: "The item you are trying to edit does not exist.",
+      });
+      return;
+    }
+
+    const convertedQuantity = convertUnits(updatedItem.quantity, updatedItem.unit, originalItem.unit);
+
+    if (convertedQuantity === null) {
+      toast({
+        variant: "destructive",
+        title: "Conversion not possible",
+        description: `Could not convert ${updatedItem.unit} to ${originalItem.unit} for ${updatedItem.name}.`,
+      });
+      return;
+    }
+
     setInventory(
       inventory.map((item) =>
-        item.id === id ? { ...item, ...updatedItem } : item
+        item.id === id ? { ...item, ...updatedItem, quantity: convertedQuantity, unit: originalItem.unit } : item
       )
     );
-    if (originalItem) {
-      setChangeLog([
-        ...changeLog,
-        `${new Date().toLocaleString()} - Edited ${originalItem.quantity} ${
-          originalItem.unit
-        } of ${originalItem.name} to ${updatedItem.quantity} ${
-          updatedItem.unit
-        } of ${updatedItem.name}`,
-      ]);
-    }
+
+    setChangeLog([
+      ...changeLog,
+      `${new Date().toLocaleString()} - Edited ${originalItem.quantity} ${
+        originalItem.unit
+      } of ${originalItem.name} to ${updatedItem.quantity} ${
+        updatedItem.unit
+      } of ${updatedItem.name}`,
+    ]);
+
     setPreviousStates([...previousStates, inventory]);
   };
 
@@ -122,6 +201,22 @@ export default function Home() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">StockWatch AI</h1>
+
+       <div className="mb-4">
+          <Label htmlFor="defaultUnit" className="mr-2">Default Unit:</Label>
+          <Select onValueChange={setDefaultUnit} defaultValue={defaultUnit}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select unit" />
+            </SelectTrigger>
+            <SelectContent>
+              {unitOptions.map((option) => (
+                <SelectItem key={option} value={option}>
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
       <Tabs defaultValue="inventory" className="w-full space-y-4">
         <TabsList>
@@ -146,6 +241,8 @@ export default function Home() {
                 inventory={inventory}
                 onDeleteItem={deleteItem}
                 onEditItem={editItem}
+                defaultUnit={defaultUnit}
+                convertUnits={convertUnits}
               />
             </CardContent>
           </Card>
@@ -156,7 +253,7 @@ export default function Home() {
               <CardTitle>Add New Item</CardTitle>
             </CardHeader>
             <CardContent>
-              <InventoryForm onAddItem={addItem} />
+              <InventoryForm onAddItem={addItem} unitOptions={unitOptions} />
             </CardContent>
           </Card>
         </TabsContent>

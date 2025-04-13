@@ -9,12 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface InventoryFormProps {
   onAddItem: (item: { name: string; quantity: number; unit: string }) => void;
+  unitOptions: string[];
 }
-
-const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces"];
 
 export const InventoryForm: React.FC<InventoryFormProps> = ({
   onAddItem,
+  unitOptions,
 }) => {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState<number | "">("");
