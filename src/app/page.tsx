@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { InventoryList } from "@/components/inventory/InventoryList";
 import { InventoryForm } from "@/components/inventory/InventoryForm";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 interface InventoryItem {
   id: string;
@@ -92,6 +93,25 @@ export default function Home() {
     useEffect(() => {
         localStorage.setItem("defaultUnit", defaultUnit);
     }, [defaultUnit]);
+
+    const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+    const [longPress, setLongPress] = useState(false);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleLongPressStart = () => {
+        setLongPress(true);
+        timerRef.current = setTimeout(() => {
+            setIsAlertDialogOpen(true);
+            setLongPress(false);
+        }, 2000); // Adjust the duration (in milliseconds) as needed
+    };
+
+    const handleLongPressEnd = () => {
+        setLongPress(false);
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+        }
+    };
 
   const addItem = (item: Omit<InventoryItem, "id">) => {
     const existingItemIndex = inventory.findIndex(
@@ -198,6 +218,12 @@ export default function Home() {
     }
   };
 
+  const clearChangeLog = () => {
+        setChangeLog([]);
+        localStorage.removeItem("changeLog");
+        setIsAlertDialogOpen(false);
+  };
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">StockWatch AI</h1>
@@ -264,6 +290,35 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <ChangeLog changeLog={changeLog} />
+              <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+                    <AlertDialogTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            className="text-red-500 mt-4"
+                            onMouseDown={handleLongPressStart}
+                            onMouseUp={handleLongPressEnd}
+                            onMouseLeave={handleLongPressEnd}
+                            onTouchStart={handleLongPressStart}
+                            onTouchEnd={handleLongPressEnd}
+                            onTouchCancel={handleLongPressEnd}
+                            style={{ opacity: longPress ? 1 : 0.1, transition: 'opacity 0.5s' }}
+                        >
+                            Clear Change Log
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the change log.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={clearChangeLog}>Continue</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </CardContent>
           </Card>
         </TabsContent>
