@@ -9,7 +9,6 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import {analyzeImage, ImageItem} from '@/services/image-analysis';
 
 const ExtractInventoryFromImageInputSchema = z.object({
   imageBase64: z.string().describe('The base64 encoded image data.'),
@@ -19,6 +18,7 @@ export type ExtractInventoryFromImageInput = z.infer<typeof ExtractInventoryFrom
 const ExtractInventoryFromImageOutputSchema = z.array(z.object({
   name: z.string().describe('The name of the item.'),
   quantity: z.number().describe('The quantity of the item.'),
+  unit: z.string().describe('The unit of the item')
 }));
 export type ExtractInventoryFromImageOutput = z.infer<typeof ExtractInventoryFromImageOutputSchema>;
 
@@ -36,7 +36,36 @@ const extractInventoryFromImageFlow = ai.defineFlow<
     outputSchema: ExtractInventoryFromImageOutputSchema,
   },
   async input => {
-    const imageItems: ImageItem[] = await analyzeImage(input.imageBase64);
-    return imageItems;
+    const prompt = ai.definePrompt({
+      name: 'extractInventoryPrompt',
+      prompt: `You are an AI assistant designed to extract inventory items from images.
+      Given an image of a receipt or inventory list, identify the items and their quantities.
+      Return a JSON array of objects, where each object has the following structure:
+      \`\`\`json
+      [
+        {
+          "name": "item name",
+          "quantity": number,
+          "unit": "unit of measure"
+        },
+        ...
+      ]
+      \`\`\`
+      Ensure that the quantity and unit are correctly identified.
+      If the unit is not explicitly mentioned, use "units".
+      
+      Here is the image data: {{media url=imageBase64}}`,
+      input: {
+        schema: z.object({
+          imageBase64: z.string().describe('The base64 encoded image data.'),
+        }),
+      },
+      output: {
+        schema: ExtractInventoryFromImageOutputSchema,
+      },
+    });
+
+    const {output} = await prompt(input);
+    return output!;
   }
 );

@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { analyzeImage, ImageItem } from "@/services/image-analysis";
 import { toast } from "@/hooks/use-toast";
 import { ImageIcon } from "lucide-react";
+import {extractInventoryFromImage} from "@/ai/flows/extract-inventory-from-image";
 
 interface ImageToInventoryProps {
   onAddItem: (item: { name: string; quantity: number; unit: string }) => void;
@@ -38,9 +38,9 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
 
     setIsAnalyzing(true);
     try {
-      const items: ImageItem[] = await analyzeImage(image);
-      items.forEach((item) => {
-        onAddItem({ name: item.name, quantity: item.quantity, unit: "units" });
+      const inventoryItems = await extractInventoryFromImage({imageBase64: image});
+      inventoryItems.forEach((item) => {
+        onAddItem({ name: item.name, quantity: item.quantity, unit: item.unit });
       });
       toast({
         title: "Analysis Complete",
