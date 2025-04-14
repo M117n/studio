@@ -120,7 +120,9 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                       <TableHead className="w-[100px]">Name</TableHead>
                                       <TableHead>Quantity</TableHead>
                                       <TableHead>Unit</TableHead>
-                                      <TableHead>Category</TableHead>
+                                      {editingId === null && (
+                                           <TableHead>Category</TableHead>
+                                      )}
                                       <TableHead className="text-right">Actions</TableHead>
                                   </TableRow>
                               </TableHeader>
@@ -190,24 +192,25 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                       </>
                                                   )}
                                               </TableCell>
-                                              <TableCell>
-                                                  {editingId === item.id ? (
-                                                      <Select onValueChange={setEditedCategory} defaultValue={editedCategory}>
-                                                          <SelectTrigger className="w-[180px]">
-                                                              <SelectValue placeholder="Select a category" />
-                                                          </SelectTrigger>
-                                                          <SelectContent>
-                                                              {categoryOptions.map((option) => (
-                                                                  <SelectItem key={option} value={option}>
-                                                                      {option}
-                                                                  </SelectItem>
-                                                              ))}
-                                                          </SelectContent>
-                                                      </Select>
-                                                  ) : (
-                                                      item.category
-                                                  )}
-                                              </TableCell>
+                                              {editingId === item.id ? (
+                                                      <TableCell>
+                                                            <Select onValueChange={setEditedCategory} defaultValue={editedCategory}>
+                                                                  <SelectTrigger className="w-[180px]">
+                                                                      <SelectValue placeholder="Select a category" />
+                                                                  </SelectTrigger>
+                                                                  <SelectContent>
+                                                                      {categoryOptions.map((option) => (
+                                                                          <SelectItem key={option} value={option}>
+                                                                              {option}
+                                                                          </SelectItem>
+                                                                      ))}
+                                                                  </SelectContent>
+                                                              </Select>
+                                                     </TableCell>
+                                                    ) : (
+                                                          <TableCell>{item.category}</TableCell>
+                                                    )}
+                                              
                                               <TableCell className="text-right">
                                                   {editingId === item.id ? (
                                                       <div className="flex justify-end gap-2">
@@ -255,4 +258,3 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     </div>
   );
 };
-
