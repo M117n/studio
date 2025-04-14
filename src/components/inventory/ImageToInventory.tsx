@@ -6,12 +6,16 @@ import { toast } from "@/hooks/use-toast";
 import { ImageIcon } from "lucide-react";
 import {extractInventoryFromImage} from "@/ai/flows/extract-inventory-from-image";
 
+type Category = "fruit" | "vegetable" | "canned" | "juices" | "dry" | "frozen" | "dairy" | "other";
+
 interface ImageToInventoryProps {
-  onAddItem: (item: { name: string; quantity: number; unit: string }) => void;
+  onAddItem: (item: { name: string; quantity: number; unit: string; category: Category }) => void;
+    defaultCategory: Category;
 }
 
 export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
   onAddItem,
+    defaultCategory,
 }) => {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -40,7 +44,7 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
     try {
       const inventoryItems = await extractInventoryFromImage({imageBase64: image});
       inventoryItems.forEach((item) => {
-        onAddItem({ name: item.name, quantity: item.quantity, unit: item.unit });
+        onAddItem({ name: item.name, quantity: item.quantity, unit: item.unit, category: defaultCategory });
       });
       toast({
         title: "Analysis Complete",
@@ -87,3 +91,4 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
     </div>
   );
 };
+

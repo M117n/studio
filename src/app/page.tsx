@@ -131,11 +131,21 @@ export default function Home() {
 
   const addItem = (item: Omit<InventoryItem, "id">) => {
     const existingItemIndex = inventory.findIndex(
-      (inventoryItem) => inventoryItem.name === item.name && inventoryItem.category === item.category
+      (inventoryItem) => inventoryItem.name === item.name
     );
 
     if (existingItemIndex > -1) {
       const existingItem = inventory[existingItemIndex];
+        // If the item exists but has a different category, update the category
+        if (existingItem.category !== item.category) {
+            const updatedInventory = [...inventory];
+            updatedInventory[existingItemIndex].category = item.category;
+            setInventory(updatedInventory);
+            setChangeLog([
+                ...changeLog,
+                `${new Date().toLocaleString()} - Category updated to ${item.category} for existing item ${item.name}`,
+            ]);
+        }
       const convertedQuantity = convertUnits(item.quantity, item.unit, existingItem.unit);
 
       if (convertedQuantity !== null) {
@@ -375,7 +385,7 @@ export default function Home() {
               <CardTitle>Image to Inventory</CardTitle>
             </CardHeader>
             <CardContent>
-              <ImageToInventory onAddItem={addItem} />
+              <ImageToInventory onAddItem={addItem} defaultCategory={defaultCategory}/>
             </CardContent>
           </Card>
         </TabsContent>
@@ -383,3 +393,4 @@ export default function Home() {
     </div>
   );
 }
+
