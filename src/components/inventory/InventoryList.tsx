@@ -28,6 +28,7 @@ interface InventoryListProps {
 }
 
 const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
+const categoryOptions: Category[] = ["fruit", "vegetable", "canned", "juices", "dry", "frozen", "dairy", "other"];
 
 export const InventoryList: React.FC<InventoryListProps> = ({
   inventory,
@@ -40,12 +41,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   const [editedName, setEditedName] = useState("");
   const [editedQuantity, setEditedQuantity] = useState<number | "">("");
   const [editedUnit, setEditedUnit] = useState("");
+    const [editedCategory, setEditedCategory] = useState<Category>("other"); // Default category
 
   const startEditing = (item: InventoryItem) => {
     setEditingId(item.id);
     setEditedName(item.name);
     setEditedQuantity(item.quantity);
     setEditedUnit(item.unit);
+      setEditedCategory(item.category);
   };
 
   const cancelEditing = () => {
@@ -76,6 +79,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
       name: editedName,
       quantity: editedQuantity,
       unit: editedUnit,
+        category: editedCategory,
     });
     setEditingId(null);
     toast({
@@ -116,6 +120,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                       <TableHead className="w-[100px]">Name</TableHead>
                                       <TableHead>Quantity</TableHead>
                                       <TableHead>Unit</TableHead>
+                                      <TableHead>Category</TableHead>
                                       <TableHead className="text-right">Actions</TableHead>
                                   </TableRow>
                               </TableHeader>
@@ -185,6 +190,24 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                       </>
                                                   )}
                                               </TableCell>
+                                              <TableCell>
+                                                  {editingId === item.id ? (
+                                                      <Select onValueChange={setEditedCategory} defaultValue={editedCategory}>
+                                                          <SelectTrigger className="w-[180px]">
+                                                              <SelectValue placeholder="Select a category" />
+                                                          </SelectTrigger>
+                                                          <SelectContent>
+                                                              {categoryOptions.map((option) => (
+                                                                  <SelectItem key={option} value={option}>
+                                                                      {option}
+                                                                  </SelectItem>
+                                                              ))}
+                                                          </SelectContent>
+                                                      </Select>
+                                                  ) : (
+                                                      item.category
+                                                  )}
+                                              </TableCell>
                                               <TableCell className="text-right">
                                                   {editingId === item.id ? (
                                                       <div className="flex justify-end gap-2">
@@ -232,3 +255,4 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     </div>
   );
 };
+
