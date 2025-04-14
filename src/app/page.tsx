@@ -14,14 +14,18 @@ import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
+type Category = "fruit" | "vegetable" | "canned" | "juices" | "dry" | "frozen" | "dairy" | "other";
+
 interface InventoryItem {
   id: string;
   name: string;
   quantity: number;
   unit: string;
+  category: Category;
 }
 
 const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
+const categoryOptions: Category[] = ["fruit", "vegetable", "canned", "juices", "dry", "frozen", "dairy", "other"];
 
 const convertUnits = (value: number, fromUnit: string, toUnit: string): number | null => {
   if (fromUnit === toUnit) {
@@ -82,6 +86,14 @@ export default function Home() {
     return "kg";
   });
 
+    const [defaultCategory, setDefaultCategory] = useState<Category>(() => {
+        if (typeof window !== "undefined") {
+            const storedCategory = localStorage.getItem("defaultCategory");
+            return (storedCategory && categoryOptions.includes(storedCategory as Category)) ? storedCategory as Category : "other";
+        }
+        return "other";
+    });
+
   useEffect(() => {
     localStorage.setItem("inventory", JSON.stringify(inventory));
   }, [inventory]);
@@ -93,6 +105,10 @@ export default function Home() {
     useEffect(() => {
         localStorage.setItem("defaultUnit", defaultUnit);
     }, [defaultUnit]);
+
+    useEffect(() => {
+        localStorage.setItem("defaultCategory", defaultCategory);
+    }, [defaultCategory]);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
     const [longPress, setLongPress] = useState(false);
@@ -115,7 +131,7 @@ export default function Home() {
 
   const addItem = (item: Omit<InventoryItem, "id">) => {
     const existingItemIndex = inventory.findIndex(
-      (inventoryItem) => inventoryItem.name === item.name
+      (inventoryItem) => inventoryItem.name === item.name && inventoryItem.category === item.category
     );
 
     if (existingItemIndex > -1) {
@@ -244,6 +260,22 @@ export default function Home() {
           </Select>
         </div>
 
+          <div className="mb-4">
+              <Label htmlFor="defaultCategory" className="mr-2">Default Category:</Label>
+              <Select onValueChange={setDefaultCategory} defaultValue={defaultCategory}>
+                  <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      {categoryOptions.map((option) => (
+                          <SelectItem key={option} value={option}>
+                              {option}
+                          </SelectItem>
+                      ))}
+                  </SelectContent>
+              </Select>
+          </div>
+
       <Tabs defaultValue="inventory" className="w-full space-y-4">
         <TabsList>
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
@@ -279,7 +311,7 @@ export default function Home() {
               <CardTitle>Add New Item</CardTitle>
             </CardHeader>
             <CardContent>
-              <InventoryForm onAddItem={addItem} unitOptions={unitOptions} />
+              <InventoryForm onAddItem={addItem} unitOptions={unitOptions} categoryOptions={categoryOptions} defaultCategory={defaultCategory}/>
             </CardContent>
           </Card>
         </TabsContent>

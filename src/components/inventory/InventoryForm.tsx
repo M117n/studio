@@ -7,23 +7,31 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+type Category = "fruit" | "vegetable" | "canned" | "juices" | "dry" | "frozen" | "dairy" | "other";
+
 interface InventoryFormProps {
-  onAddItem: (item: { name: string; quantity: number; unit: string }) => void;
+  onAddItem: (item: { name: string; quantity: number; unit: string; category: Category }) => void;
   unitOptions: string[];
+  categoryOptions: Category[];
+    defaultCategory: Category;
 }
 
 export const InventoryForm: React.FC<InventoryFormProps> = ({
   onAddItem,
   unitOptions,
+  categoryOptions,
+    defaultCategory,
 }) => {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState<number | "">("");
   const [unit, setUnit] = useState(unitOptions[0]);
+    const [category, setCategory] = useState<Category>(defaultCategory);
+
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!name || quantity === "" || !unit) {
+    if (!name || quantity === "" || !unit || !category) {
       toast({
         title: "Missing fields",
         description: "Please fill in all fields.",
@@ -40,10 +48,11 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
       return;
     }
 
-    onAddItem({ name, quantity, unit });
+    onAddItem({ name, quantity, unit, category });
     setName("");
     setQuantity("");
     setUnit(unitOptions[0]);
+      setCategory(defaultCategory);
     toast({
       title: "Item Added",
       description: `Added ${quantity} ${unit} of ${name} to inventory.`,
@@ -89,6 +98,21 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
           </SelectContent>
         </Select>
       </div>
+        <div>
+            <Label htmlFor="category">Category</Label>
+            <Select onValueChange={setCategory} defaultValue={defaultCategory}>
+                <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Select a category" />
+                </SelectTrigger>
+                <SelectContent>
+                    {categoryOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                            {option}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </div>
       <Button type="submit">Add Item</Button>
     </form>
   );
