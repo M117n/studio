@@ -120,7 +120,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                       <TableHead className="w-[100px]">Name</TableHead>
                                       <TableHead>Quantity</TableHead>
                                       <TableHead>Unit</TableHead>
-                                      {editingId === null && (
+                                      {editingId === null ? null : (
                                            <TableHead>Category</TableHead>
                                       )}
                                       <TableHead className="text-right">Actions</TableHead>
@@ -207,9 +207,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                                   </SelectContent>
                                                               </Select>
                                                      </TableCell>
-                                                    ) : (
-                                                          <TableCell>{item.category}</TableCell>
-                                                    )}
+                                                    ) : null}
                                               
                                               <TableCell className="text-right">
                                                   {editingId === item.id ? (
