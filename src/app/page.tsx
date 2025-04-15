@@ -253,9 +253,9 @@ export default function Home() {
 
     const [searchQuery, setSearchQuery] = useState("");
 
-    const filteredInventory = inventory.filter(item =>
-        item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // const filteredInventory = inventory.filter(item =>
+    //     item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    // );
 
   return (
     <div className="container mx-auto p-4">
@@ -320,11 +320,12 @@ export default function Home() {
                     className="mb-4"
                 />
               <InventoryList
-                inventory={filteredInventory}
+                inventory={inventory}
                 onDeleteItem={deleteItem}
                 onEditItem={editItem}
                 defaultUnit={defaultUnit}
                 convertUnits={convertUnits}
+                searchQuery={searchQuery}
               />
             </CardContent>
           </Card>
