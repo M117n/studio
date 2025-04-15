@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 
 type Category = "fruit" | "vegetable" | "canned" | "juices" | "dry" | "frozen" | "dairy" | "other";
 
@@ -250,6 +251,12 @@ export default function Home() {
         setIsAlertDialogOpen(false);
   };
 
+    const [searchQuery, setSearchQuery] = useState("");
+
+    const filteredInventory = inventory.filter(item =>
+        item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">StockWatch AI</h1>
@@ -298,15 +305,22 @@ export default function Home() {
           <Card>
             <CardHeader className="flex justify-between items-center">
               <CardTitle>Current Inventory</CardTitle>
-               {previousStates.length > 0 && (
-                  <Button size="sm" variant="outline" onClick={restorePreviousState}>
-                    Restore Previous State
-                  </Button>
+                {previousStates.length > 0 && (
+                    <Button size="sm" variant="outline" onClick={restorePreviousState}>
+                        Restore Previous State
+                    </Button>
                 )}
             </CardHeader>
             <CardContent>
+                <Input
+                    type="text"
+                    placeholder="Search items..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="mb-4"
+                />
               <InventoryList
-                inventory={inventory}
+                inventory={filteredInventory}
                 onDeleteItem={deleteItem}
                 onEditItem={editItem}
                 defaultUnit={defaultUnit}
