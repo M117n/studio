@@ -325,7 +325,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                     </TableBody>
                 </Table>
             ) : (
-                <Accordion type="multiple" collapsible>
+                <Accordion type="multiple" collapsible={"true"}>
                     {Object.entries(groupedInventory).map(([mainCategory, items]) => {
                         const hasSubcategories = subcategories[mainCategory as keyof typeof subcategories].length > 0;
                         return (
