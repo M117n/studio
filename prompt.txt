@@ -1,0 +1,135 @@
+You are a full stack software developer. Develop a comprehensive, production-ready application that mirrors the functionality and structure of the provided codebase but utilizes an entirely different technology stack. The specific technologies for the new stack will be determined later by the user. Therefore, prioritize flexibility, modularity, and a clear separation of concerns to ensure seamless integration with various technologies.
+
+**Application Core Features:**
+
+The new application must replicate the following features of the current project:
+
+1.  **Image to Inventory Conversion:**
+    *   Implement the functionality to extract data from images of items and transform it into structured inventory data; this will accomplished by using an ia model on the openai API.
+    *   The model will take an image and will decide if its a menu or an order; if its a menu it will generate the suggested amounts of ingredients for an specific quantity of servings for each day in a specific format, if its an order will also generate a specific format. 
+    *   The app then will add the new items to the inventory (if its an order) if its a menu will make the comparison suggested later in this prompt.
+    *   The app must have a UI element to perform this operation.
+2.  **Inventory Management:**
+    *   Enable users to add, remove, modify, and view inventory items.
+    *   Include a feature to list all inventory items; categories and subcategories in the following way:
+        units:
+        "kg",
+        "g",
+        "L",
+        "mL",
+        "units",
+        "boxes",
+        "pieces",
+        "lb",
+        "oz",
+        "gallon (US)",
+        "quart (US)",
+        "pint (US)",
+        "fluid oz (US)",
+        "gallon (UK)",
+        "quart (UK)",
+        "pint (UK)",
+        "fluid oz (UK)"
+
+        subcategories:
+
+        "cooler",
+        "freezer",
+        "dry",
+        "canned",
+        "other",
+        "fruit",
+        "vegetables",
+        "juices",
+        "dairy",
+        "meats",
+        "cooked meats",
+        "frozen vegetables",
+        "bread",
+        "desserts",
+        "soups",
+        "dressings"
+
+        Subcategories in categories
+        cooler: ["fruit", "vegetables", "juices", "dairy"],
+        freezer: [
+            "meats",
+            "cooked meats",
+            "frozen vegetables",
+            "bread",
+            "desserts",
+            "soups",
+            "dressings",
+        ],
+        dry: [],
+        canned: [],
+        other: []
+
+    *   Provide a form to modify the inventory items, as:
+            Editing Items:
+        Each item has an "Edit" button.
+        Clicking "Edit" makes the item's row editable, turning the Name, Quantity, and Unit into input fields.
+        A Select component is used for choosing the Unit and Category, with predefined options.
+        The quantity input is of type number.
+        "Save" and "Cancel" buttons appear when editing.
+        The category is only visible when editing an item.
+        When the user presses save, an event onEditItem is triggered with the data of the item.
+        If the data is missing when the user press save, a toast message is displayed.
+        If the quantity introduced is not a number, a toast message is displayed.
+            Deleting Items:
+        Each item has a "Delete" button.
+        Clicking "Delete" triggers the onDeleteItem callback, passing the item's id.
+            Search:
+        It filters the displayed items based on the searchQuery prop.
+        The search is case-insensitive and looks for matches in the item's name.
+            Local State:
+        editingId: Tracks which item is currently being edited (or null if none).
+        editedName, editedQuantity, editedUnit, editedCategory: Hold the temporary values while an item is being edited.
+
+    *   Maintain a change log for all inventory modifications.
+3.  **CSV Import/Export:**
+    *   Allow users to import and export inventory data in CSV format.
+    *   Provide a user interface for CSV operations.
+4.  **UI Components:**
+    *   Create a rich set of UI components, including but not limited to: buttons, forms, lists, alerts, dialogs, etc. These should be modular and reusable, similar to the `src/components/ui/` and `src/components/inventory/` directories.
+    *   Include advanced UI elements like accordions, calendars, charts, dropdown menus, and others.
+
+**Code Structure and Architecture Guidelines:**
+
+1.  **Modularity:**
+    *   Organize the codebase into logical modules or components to promote reusability and maintainability.
+    *   Ensure a clear separation of concerns, distinctly separating UI components, data fetching/manipulation, and AI-related operations.
+2.  **Best Practices:**
+    *   Employ best practices such as dependency injection, the single responsibility principle, and other relevant design patterns.
+    *   Prioritize code readability, maintainability, and extensibility.
+3.  **Separation of Concerns:**
+    *   Maintain a clear distinction between:
+        *   UI components and their presentation logic.
+        *   Data fetching, manipulation, and business logic.
+        *   AI-related functionalities and processing.
+
+**Technology Stack Adaptability:**
+
+1.  **Framework Agnostic:**
+    *   Use flutter to create a mobile app, django and python for the API.
+2.  **Data Store Flexibility:**
+    *   Use postgreSQL
+    *   Use firebase to store data.   
+3.  **Modular Design:**
+    *   The code should feature a modular design with well-defined interfaces for each module.
+    *   Modules should be loosely coupled, allowing for individual replacement or modification without affecting other modules.
+4. **Abstraction**:
+    * The code should provide clear points of abstraction that can be replaced or implemented differently, depending on the technologies chosen by the user.
+
+**Production Readiness Requirements:**
+
+1.  **Robustness:**
+    *   Generate code that is production-ready, including considerations for:
+        *   Performance optimization.
+        *   Comprehensive error handling.
+        *   Security best practices.
+        *   Testability, allowing for easy unit, integration, and end-to-end testing.
+2.  **Functionality:**
+    *   The resulting application must be fully functional, not a mere template or a collection of examples.
+
+*** Construct a complete code base for an app that will run***
