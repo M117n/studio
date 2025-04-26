@@ -71,12 +71,12 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
           className="hidden"
           id="image-upload"
         />
-        <label htmlFor="image-upload">
-          <Button asChild>
+        <Button asChild>
+          <label htmlFor="image-upload" className="cursor-pointer">
             <ImageIcon className="mr-2 h-4 w-4" />
             <span>Upload Image</span>
-          </Button>
-        </label>
+          </label>
+        </Button>
       </div>
       {image && (
         <img
