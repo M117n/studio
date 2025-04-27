@@ -195,28 +195,19 @@ export default function Home() {
 
         if (existingItemIndex > -1) {
             const existingItem = inventory[existingItemIndex];
-            // If the item exists but has a different category, update the category
-            if (existingItem.category !== item.category) {
-                const updatedInventory = [...inventory];
-                updatedInventory[existingItemIndex].category = item.category;
-                setInventory(updatedInventory);
-                setChangeLog([
-                    ...changeLog,
-                    `${new Date().toLocaleString()} - Category updated to ${item.category} for existing item ${item.name}`,
-                ]);
-            }
+        // Always use existing item's category when adding stock
+        const existingCategory = existingItem.category;
             const convertedQuantity = convertUnits(item.quantity, item.unit, existingItem.unit);
 
-            if (convertedQuantity !== null) {
-                const updatedInventory = [...inventory];
-                updatedInventory[existingItemIndex].quantity += convertedQuantity;
-                setInventory(updatedInventory);
-
-                setChangeLog([
-                    ...changeLog,
-                    `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} (converted to ${convertedQuantity} ${existingItem.unit}) to existing item ${item.name}`,
-                ]);
-            } else {
+        if (convertedQuantity !== null) {
+            const updatedInventory = [...inventory];
+            updatedInventory[existingItemIndex].quantity += convertedQuantity;
+            setInventory(updatedInventory);
+            setChangeLog([
+                ...changeLog,
+                `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} (converted to ${convertedQuantity} ${existingItem.unit}) to existing item ${item.name} in category ${existingCategory}`,
+            ]);
+        } else {
                 toast({
                     variant: "destructive",
                     title: "Conversion not possible",

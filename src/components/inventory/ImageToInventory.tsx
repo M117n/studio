@@ -20,6 +20,7 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Handle raw image upload without compression
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -42,7 +43,17 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
 
     setIsAnalyzing(true);
     try {
-      const inventoryItems = await extractInventoryFromImage({imageBase64: image});
+      const inventoryItems = await extractInventoryFromImage({ imageBase64: image });
+      // If no relevant items found, warn user and do not update inventory
+      if (!inventoryItems || inventoryItems.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "No Items Found",
+          description: "The uploaded image does not contain identifiable inventory items.",
+        });
+        return;
+      }
+      // Add each recognized item to inventory
       inventoryItems.forEach((item) => {
         onAddItem({ name: item.name, quantity: item.quantity, unit: item.unit, category: defaultCategory });
       });

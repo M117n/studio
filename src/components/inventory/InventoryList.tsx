@@ -47,8 +47,6 @@ interface InventoryListProps {
 const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
 
 const categoryOptions: Category[] = [
-    "cooler",
-    "freezer",
     "dry",
     "canned",
     "other",
