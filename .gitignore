@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/tests
+/tests_results
 
 # next.js
 /.next/
@@ -39,6 +41,7 @@ next-env.d.ts
 
 .genkit/*
 
+#env
 .env
 .env.local
 /.env
