@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -51,8 +52,6 @@ interface InventoryItem {
 const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
 
 const categoryOptions: Category[] = [
-    "cooler",
-    "freezer",
     "dry",
     "canned",
     "other",
@@ -151,6 +150,24 @@ export default function Home() {
     useEffect(() => {
         localStorage.setItem("defaultCategory", defaultCategory);
     }, [defaultCategory]);
+    // Dark mode preference
+    const [darkMode, setDarkMode] = useState<boolean>(() => {
+        if (typeof window !== "undefined") {
+            const storedDarkMode = localStorage.getItem("darkMode");
+            return storedDarkMode === "true";
+        }
+        return false;
+    });
+    useEffect(() => {
+        if (darkMode) {
+            document.documentElement.classList.add("dark");
+        } else {
+            document.documentElement.classList.remove("dark");
+        }
+        if (typeof window !== "undefined") {
+            localStorage.setItem("darkMode", darkMode.toString());
+        }
+    }, [darkMode]);
 
     const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
     const [longPress, setLongPress] = useState(false);
@@ -322,20 +339,9 @@ export default function Home() {
                         </Select>
                     </div>
 
-                    <div className="px-4 py-2">
-                        <Label htmlFor="defaultCategory" className="block text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Default Category</Label>
-                        <Select onValueChange={setDefaultCategory} defaultValue={defaultCategory}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {categoryOptions.map((option) => (
-                                    <SelectItem key={option} value={option}>
-                                        {option}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="px-4 py-2 flex items-center justify-between">
+                        <Label htmlFor="darkMode" className="block text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Dark Mode</Label>
+                        <Switch id="darkMode" checked={darkMode} onCheckedChange={setDarkMode} />
                     </div>
                 </DropdownMenuContent>
             </DropdownMenu>

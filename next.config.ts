@@ -4,7 +4,6 @@ import withPWA from 'next-pwa';
 const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: true,
-  swcMinify: true,
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -13,8 +12,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
-export default withPWA({
+// Wrap Next.js config with PWA support (always enabled)
+const pwaConfig = {
   dest: 'public',
-  disable: process.env.NODE_ENV === 'development', // Solo activa PWA en producción
-})(nextConfig);
+  register: true,
+  skipWaiting: true,
+  disable: false, // enable PWA in all environments
+};
+export default withPWA(pwaConfig)(nextConfig);
