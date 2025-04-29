@@ -23,6 +23,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Settings } from "lucide-react";
 
+// Key for offline operation queue in localStorage
+const QUEUE_KEY = "inventorySyncQueue";
+
+// Enqueue an inventory operation (add/update/delete) for later sync
+function enqueueOp(op: any) {
+  if (typeof window === "undefined") return;
+  const qRaw = localStorage.getItem(QUEUE_KEY);
+  const queue = qRaw ? JSON.parse(qRaw) : [];
+  queue.push(op);
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+}
+
 type Category =
     | "cooler"
     | "freezer"
@@ -150,6 +162,72 @@ export default function Home() {
     useEffect(() => {
         localStorage.setItem("defaultCategory", defaultCategory);
     }, [defaultCategory]);
+    
+    // Fetch inventory from server on mount (if online)
+    useEffect(() => {
+        if (!navigator.onLine) return;
+        async function fetchServer() {
+            try {
+                const res = await fetch("/api/inventory");
+                if (res.ok) {
+                    const data = await res.json();
+                    setInventory(data);
+                }
+            } catch (e) {
+                console.error("Failed to fetch server inventory", e);
+            }
+        }
+        fetchServer();
+    }, []);
+
+    // Process offline queue when back online
+    useEffect(() => {
+        async function processQueue() {
+            if (!navigator.onLine) return;
+            const qRaw = localStorage.getItem(QUEUE_KEY);
+            const queue = qRaw ? JSON.parse(qRaw) : [];
+            const newQueue: any[] = [];
+            for (const op of queue) {
+                try {
+                    if (op.type === "add") {
+                        await fetch("/api/inventory", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(op.item),
+                        });
+                    } else if (op.type === "update") {
+                        await fetch(`/api/inventory/${op.id}`, {
+                            method: "PUT",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(op.data),
+                        });
+                    } else if (op.type === "delete") {
+                        await fetch(`/api/inventory/${op.id}`, {
+                            method: "DELETE",
+                        });
+                    }
+                } catch {
+                    newQueue.push(op);
+                }
+            }
+            localStorage.setItem(QUEUE_KEY, JSON.stringify(newQueue));
+            // Refresh local inventory from server
+            try {
+                const res = await fetch("/api/inventory");
+                if (res.ok) {
+                    const data = await res.json();
+                    setInventory(data);
+                }
+            } catch {}
+        }
+        window.addEventListener("online", processQueue);
+        if (navigator.onLine) {
+            processQueue();
+        }
+        return () => {
+            window.removeEventListener("online", processQueue);
+        };
+    }, [inventory]);
     // Dark mode preference
     const [darkMode, setDarkMode] = useState<boolean>(() => {
         if (typeof window !== "undefined") {
@@ -225,6 +303,25 @@ export default function Home() {
             ]);
         }
         setPreviousStates([...previousStates, inventory]);
+        // Enqueue operation for server sync
+        if (existingItemIndex > -1) {
+          // Update existing item on server
+          const updatedQty = inventory[existingItemIndex].quantity +
+            (convertUnits(item.quantity, item.unit, inventory[existingItemIndex].unit) || 0);
+          enqueueOp({
+            type: "update",
+            id: inventory[existingItemIndex].id,
+            data: {
+              name: inventory[existingItemIndex].name,
+              quantity: updatedQty,
+              unit: inventory[existingItemIndex].unit,
+              category: inventory[existingItemIndex].category,
+            },
+          });
+        } else {
+          // Add new item to server
+          enqueueOp({ type: "add", item });
+        }
     };
 
     const deleteItem = (id: string) => {
@@ -238,6 +335,8 @@ export default function Home() {
             ]);
         }
         setPreviousStates([...previousStates, inventory]);
+        // Enqueue delete operation for server sync
+        enqueueOp({ type: "delete", id });
     };
 
     const editItem = (id: string, updatedItem: Omit<InventoryItem, "id">) => {
@@ -276,6 +375,17 @@ export default function Home() {
         ]);
 
         setPreviousStates([...previousStates, inventory]);
+        // Enqueue update operation for server sync
+        enqueueOp({
+          type: "update",
+          id,
+          data: {
+            name: updatedItem.name,
+            quantity: convertedQuantity,
+            unit: originalItem.unit,
+            category: updatedItem.category,
+          },
+        });
     };
 
     const restorePreviousState = () => {
