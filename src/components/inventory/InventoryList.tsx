@@ -6,9 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Edit, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-
+import type { InventoryItem } from "@/types/inventory";
+// Category union for inventory items
 type Category =
     | "cooler"
     | "freezer"
@@ -26,14 +25,9 @@ type Category =
     | "desserts"
     | "soups"
     | "dressings";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
-interface InventoryItem {
-    id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    category: Category;
-}
 
 interface InventoryListProps {
     inventory: InventoryItem[];

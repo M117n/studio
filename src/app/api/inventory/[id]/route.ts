@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
+import type { InventoryItem, InventoryItemData } from "@/types/inventory";
 
 interface Params {
   params: {
@@ -11,7 +12,7 @@ interface Params {
 export async function PUT(request: Request, { params }: Params) {
   const { id } = params;
   try {
-    const data = await request.json();
+    const data: InventoryItemData = await request.json();
     const { name, quantity, unit, category } = data;
     if (
       typeof name !== "string" ||
@@ -25,8 +26,8 @@ export async function PUT(request: Request, { params }: Params) {
       );
     }
     const docRef = db.collection("inventory").doc(id);
-    await docRef.update({ name, quantity, unit, category });
-    return NextResponse.json({ id, name, quantity, unit, category });
+    await docRef.update(data);
+    return NextResponse.json({ id, ...data } as InventoryItem);
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Failed to update inventory item" },

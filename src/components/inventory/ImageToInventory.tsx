@@ -5,12 +5,13 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { ImageIcon } from "lucide-react";
 import {extractInventoryFromImage} from "@/ai/flows/extract-inventory-from-image";
+import type { InventoryItemData } from "@/types/inventory";
 
 type Category = "fruit" | "vegetable" | "canned" | "juices" | "dry" | "frozen" | "dairy" | "other";
 
 interface ImageToInventoryProps {
-  onAddItem: (item: { name: string; quantity: number; unit: string; category: Category }) => void;
-    defaultCategory: Category;
+  onAddItem: (item: InventoryItemData) => void;
+  defaultCategory: Category;
 }
 
 export const ImageToInventory: React.FC<ImageToInventoryProps> = ({

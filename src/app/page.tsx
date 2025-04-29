@@ -6,6 +6,7 @@ import { InventoryForm } from "@/components/inventory/InventoryForm";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
+import type { InventoryItem } from "@/types/inventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -51,15 +52,6 @@ type Category =
     | "bread"
     | "desserts"
     | "soups"
-    | "dressings";
-
-interface InventoryItem {
-    id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    category: Category;
-}
 
 const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
 

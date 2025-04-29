@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { InventoryItemData } from "@/types/inventory";
 
 type Category =
     | "cooler"
@@ -26,7 +27,7 @@ type Category =
     | "dressings";
 
 interface InventoryFormProps {
-    onAddItem: (item: { name: string; quantity: number; unit: string; category: Category }) => void;
+    onAddItem: (item: InventoryItemData) => void;
     unitOptions: string[];
     categoryOptions: Category[];
     defaultCategory: Category;
