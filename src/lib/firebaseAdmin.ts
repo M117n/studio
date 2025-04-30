@@ -29,7 +29,6 @@ const privateKey = getEnv("FIREBASE_PRIVATE_KEY")
   .replace(/^"|"$/g, "");
 
 // Initialize Firebase Admin SDK
-// Initialize Firebase Admin SDK (singleton)
 if (!getApps().length) {
   initializeApp({
     credential: cert({ projectId, clientEmail, privateKey }),
