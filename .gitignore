@@ -40,10 +40,9 @@ next-env.d.ts
 .genkit/*
 
 #env
-.env
-.env.local
 /.env
+/.env.local
+/.env.build
 
 # Firebase
-smartstock-e8146-firebase-adminsdk-fbsvc-38e06d382c.json
 /smartstock-e8146-firebase-adminsdk-fbsvc-38e06d382c.json
