@@ -16,8 +16,9 @@ const projectId   = getEnv('FIREBASE_PROJECT_ID');
 const clientEmail = getEnv('FIREBASE_CLIENT_EMAIL');
 // The private key may contain literal `\n` sequences; replace them with actual newlines
 const privateKey  = getEnv('FIREBASE_PRIVATE_KEY')
-                     .replace(/\\n/g, '\n')
-                     .replace(/\\r/g, '\r');
+//const privateKey  = getEnv('FIREBASE_PRIVATE_KEY')
+//                     .replace(/\\n/g, '\n')
+//                     .replace(/\\r/g, '\r');
 
 // Initialize Firebase Admin SDK
 // Initialize Firebase Admin SDK (singleton)
