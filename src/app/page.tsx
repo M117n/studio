@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";;
 import { InventoryList } from "@/components/inventory/InventoryList";
 import { InventoryForm } from "@/components/inventory/InventoryForm";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
@@ -172,13 +172,14 @@ export default function Home() {
         fetchServer();
     }, []);
 
-    // Process offline queue when back online
-    useEffect(() => {
-        async function processQueue() {
+    // ---------- Process offline queue ----------
+    const processQueue = useCallback(async () => {
             if (!navigator.onLine) return;
+    
             const qRaw = localStorage.getItem(QUEUE_KEY);
-            const queue = qRaw ? JSON.parse(qRaw) : [];
+            const queue: any[] = qRaw ? JSON.parse(qRaw) : [];
             const newQueue: any[] = [];
+    
             for (const op of queue) {
                 try {
                     if (op.type === "add") {
@@ -194,32 +195,34 @@ export default function Home() {
                             body: JSON.stringify(op.data),
                         });
                     } else if (op.type === "delete") {
-                        await fetch(`/api/inventory/${op.id}`, {
-                            method: "DELETE",
-                        });
+                        await fetch(`/api/inventory/${op.id}`, { method: "DELETE" });
                     }
                 } catch {
-                    newQueue.push(op);
+                    newQueue.push(op);   // si falla, vuelve a la cola
                 }
             }
+    
             localStorage.setItem(QUEUE_KEY, JSON.stringify(newQueue));
-            // Refresh local inventory from server
+    
+            // Trae inventario fresco del servidor
             try {
                 const res = await fetch("/api/inventory");
                 if (res.ok) {
                     const data = await res.json();
                     setInventory(data);
                 }
-            } catch {}
-        }
-        window.addEventListener("online", processQueue);
-        if (navigator.onLine) {
+            } catch (e) {
+                console.error("Failed to refresh inventory:", e);
+            }
+        }, []);   // ← sin dependencias: misma referencia siempre
+    
+        useEffect(() => {
+            // 1) Procesar cola inmediatamente si estamos online
             processQueue();
-        }
-        return () => {
-            window.removeEventListener("online", processQueue);
-        };
-    }, [inventory]);
+            // 2) Volver a procesarla cada vez que recuperamos conexión
+            window.addEventListener("online", processQueue);
+            return () => window.removeEventListener("online", processQueue);
+        }, [processQueue]);   // ← solo depende de la función memorizada
     // Dark mode preference
     const [darkMode, setDarkMode] = useState<boolean>(() => {
         if (typeof window !== "undefined") {

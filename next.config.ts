@@ -1,3 +1,6 @@
+import { validateEnv } from "./src/lib/validateEnv"; //
+validateEnv(); 
+
 import type {NextConfig} from 'next';
 import withPWA from 'next-pwa';
 
@@ -12,11 +15,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Wrap Next.js config with PWA support (always enabled)
+// Wrap Next.js config with PWA support (enabled only in production to avoid multiple GenerateSW calls)
+const isProduction = process.env.NODE_ENV === 'production';
 const pwaConfig = {
   dest: 'public',
   register: true,
   skipWaiting: true,
-  disable: false, // enable PWA in all environments
+  // Disable PWA in non-production builds to prevent GenerateSW running multiple times in watch mode
+  disable: !isProduction,
 };
 export default withPWA(pwaConfig)(nextConfig);
