@@ -290,6 +290,7 @@ export default function Home() {
               quantity: updatedQty,
               unit: inventory[existingItemIndex].unit,
               category: inventory[existingItemIndex].category,
+              subcategory: inventory[existingItemIndex].subcategory,
             },
           });
         } else {
@@ -358,6 +359,7 @@ export default function Home() {
             quantity: convertedQuantity,
             unit: originalItem.unit,
             category: updatedItem.category,
+            subcategory: updatedItem.subcategory,
           },
         });
     };

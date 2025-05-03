@@ -22,12 +22,13 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
     );
   }
 
-  const { name, quantity, unit, category } = body;
+  const { name, quantity, unit, category, subcategory } = body;
   if (
     typeof name !== "string" ||
     typeof quantity !== "number" ||
     typeof unit !== "string" ||
-    typeof category !== "string"
+    typeof category !== "string" ||
+    typeof subcategory !== "string"
   ) {
     return NextResponse.json(
       { error: "Invalid inventory item data" },

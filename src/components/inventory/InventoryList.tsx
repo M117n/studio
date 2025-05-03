@@ -91,21 +91,24 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         });
     };
 
-    // Group inventory items by main category
-    const groupedInventory = inventory.reduce((acc: { [key: string]: InventoryItem[] }, item) => {
-        const mainCategory = getMainCategory(item.category);
-        if (!acc[mainCategory]) {
-            acc[mainCategory] = [];
-        }
-        acc[mainCategory].push(item);
-        return acc;
-    }, {
-        cooler: [],
-        freezer: [],
-        dry: [],
-        canned: [],
-        other: [],
-    });
+    // Group inventory items by their stored main category
+    const groupedInventory = inventory.reduce(
+        (acc: Record<Category, InventoryItem[]>, item) => {
+            const mainCategory = item.category;
+            if (!acc[mainCategory]) {
+                acc[mainCategory] = [];
+            }
+            acc[mainCategory].push(item);
+            return acc;
+        },
+        {
+            cooler: [],
+            freezer: [],
+            dry: [],
+            canned: [],
+            other: [],
+        } as Record<Category, InventoryItem[]>
+    );
 
     const subcategories: { [key: string]: SubCategory[] } = {
         cooler: ["fruit", "vegetables", "juices", "dairy"],
@@ -298,7 +301,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                     {hasSubcategories ? (
                                         <Accordion type="multiple">
                                             {subcategories[mainCategory as keyof typeof subcategories].map(subcategory => {
-                                                const subcategoryItems = items.filter(item => item.category === subcategory);
+                                                const subcategoryItems = items.filter(item => item.subcategory === subcategory);
                                                 if (subcategoryItems.length === 0) {
                                                     return null;
                                                 }
