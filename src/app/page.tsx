@@ -6,7 +6,9 @@ import { InventoryForm } from "@/components/inventory/InventoryForm";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
-import type { InventoryItem } from "@/types/inventory";
+import type { InventoryItem, Category, Unit, SubCategory } from "@/types/inventory";
+import { SUBCATEGORY_OPTIONS, CATEGORY_OPTIONS } from "@/types/inventory";
+import { UNIT_OPTIONS } from "@/types/inventory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -36,49 +38,12 @@ function enqueueOp(op: any) {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
-type Category =
-    | "cooler"
-    | "freezer"
-    | "dry"
-    | "canned"
-    | "other"
-    | "fruit"
-    | "vegetables"
-    | "juices"
-    | "dairy"
-    | "meats"
-    | "cooked meats"
-    | "frozen vegetables"
-    | "bread"
-    | "desserts"
-    | "soups"
-
-const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
-
-const categoryOptions: Category[] = [
-    "dry",
-    "canned",
-    "other",
-    "fruit",
-    "vegetables",
-    "juices",
-    "dairy",
-    "meats",
-    "cooked meats",
-    "frozen vegetables",
-    "bread",
-    "desserts",
-    "soups",
-    "dressings",
-];
-
-const convertUnits = (value: number, fromUnit: string, toUnit: string): number | null => {
-    if (fromUnit === toUnit) {
-        return value;
-    }
+const categoryOptions = CATEGORY_OPTIONS;
+const subcategoryOptions = SUBCATEGORY_OPTIONS;
+const unitOptions     = UNIT_OPTIONS;
 
     // Conversion factors
-    const factors: { [key: string]: { [key: string]: number } } = {
+    const factors: Partial<Record<Unit, Partial<Record<Unit, number>>>> = {
         "kg": { "g": 1000, "lb": 2.20462, "oz": 35.274 },
         "g": { "kg": 0.001, "lb": 0.00220462, "oz": 0.035274 },
         "lb": { "kg": 0.453592, "g": 453.592, "oz": 16 },
@@ -95,16 +60,15 @@ const convertUnits = (value: number, fromUnit: string, toUnit: string): number |
         "fluid oz (UK)": { "L": 0.0284131, "mL": 28.4131, "gallon (UK)": 0.00625, "quart (UK)": 0.025, "pint (UK)": 0.05 },
     };
 
-    if (factors[fromUnit] && factors[fromUnit][toUnit]) {
-        return value * factors[fromUnit][toUnit];
-    }
+    const convertUnits = (
+        value: number,
+        fromUnit: Unit,
+        toUnit: Unit,
+      ): number | null => { if (fromUnit === toUnit) return value;
+        const factor = factors[fromUnit]?.[toUnit];
+        return factor ? value * factor : null;};
 
-    // Handle cases where direct conversion is not available (e.g., kg to L)
-    // You might want to add more sophisticated logic here based on the types of units
-    // For now, return null to indicate that conversion is not possible
-    return null;
-};
-
+        
 export default function Home() {
     const [inventory, setInventory] = useState<InventoryItem[]>(() => {
         if (typeof window !== "undefined") {
@@ -124,20 +88,35 @@ export default function Home() {
 
     const [previousStates, setPreviousStates] = useState<InventoryItem[][]>([]);
 
-    const [defaultUnit, setDefaultUnit] = useState<string>(() => {
+    const [defaultUnit, setDefaultUnit] = useState<Unit>(() => {
         if (typeof window !== "undefined") {
-            return localStorage.getItem("defaultUnit") || "kg";
+          const stored = localStorage.getItem("defaultUnit");
+          return stored && UNIT_OPTIONS.includes(stored as Unit)
+            ? (stored as Unit)
+            : "kg";
         }
         return "kg";
-    });
+      });
 
     const [defaultCategory, setDefaultCategory] = useState<Category>(() => {
+          if (typeof window !== "undefined") {
+            const stored = localStorage.getItem("defaultCategory");
+            return stored && categoryOptions.includes(stored as Category)
+              ? (stored as Category)
+              : "other";
+          }
+          return "other";
+        });
+    
+    const [defaultSubcategory, setDefaultSubcategory] = useState<SubCategory>(() => {
         if (typeof window !== "undefined") {
-            const storedCategory = localStorage.getItem("defaultCategory");
-            return (storedCategory && categoryOptions.includes(storedCategory as Category)) ? storedCategory as Category : "other";
+          const stored = localStorage.getItem("defaultSubCategory");
+          return stored && subcategoryOptions.includes(stored as SubCategory)
+            ? (stored as SubCategory)
+            : "other";
         }
         return "other";
-    });
+      });
 
     useEffect(() => {
         localStorage.setItem("inventory", JSON.stringify(inventory));
@@ -421,12 +400,12 @@ export default function Home() {
                 <DropdownMenuContent className="sm:w-60" align="end" forceMount>
                     <div className="px-4 py-2">
                         <Label htmlFor="defaultUnit" className="block text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Default Unit</Label>
-                        <Select onValueChange={setDefaultUnit} defaultValue={defaultUnit}>
+                        <Select onValueChange={(v) => setDefaultUnit(v as Unit)} defaultValue={defaultUnit}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Select unit" />
                             </SelectTrigger>
                             <SelectContent>
-                                {unitOptions.map((option) => (
+                                {unitOptions.map((option: string) => (
                                     <SelectItem key={option} value={option}>
                                         {option}
                                     </SelectItem>
@@ -485,7 +464,7 @@ export default function Home() {
                             <CardTitle>Add New Item</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <InventoryForm onAddItem={addItem} unitOptions={unitOptions} categoryOptions={categoryOptions} defaultCategory={defaultCategory} />
+                            <InventoryForm onAddItem={addItem} unitOptions={UNIT_OPTIONS} subcategoryOptions={SUBCATEGORY_OPTIONS} defaultSubcategory={defaultSubcategory} />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -549,7 +528,7 @@ export default function Home() {
                             <CardTitle>Image to Inventory</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <ImageToInventory onAddItem={addItem} defaultCategory={defaultCategory} />
+                            <ImageToInventory onAddItem={addItem} defaultSubcategory={defaultSubcategory} />
                         </CardContent>
                     </Card>
                 </TabsContent>

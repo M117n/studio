@@ -3,28 +3,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS, getMainCategory } from "@/types/inventory";
+import type { InventoryItem, Category, Unit, SubCategory } from "@/types/inventory";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Edit, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { InventoryItem } from "@/types/inventory";
-// Category union for inventory items
-type Category =
-    | "cooler"
-    | "freezer"
-    | "dry"
-    | "canned"
-    | "other"
-    | "fruit"
-    | "vegetables"
-    | "juices"
-    | "dairy"
-    | "meats"
-    | "cooked meats"
-    | "frozen vegetables"
-    | "bread"
-    | "desserts"
-    | "soups"
-    | "dressings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
@@ -33,29 +16,16 @@ interface InventoryListProps {
     inventory: InventoryItem[];
     onDeleteItem: (id: string) => void;
     onEditItem: (id: string, updatedItem: Omit<InventoryItem, "id">) => void;
-    defaultUnit: string;
-    convertUnits: (value: number, fromUnit: string, toUnit: string) => number | null;
+    defaultUnit: Unit;
+    convertUnits: (value: number, fromUnit: Unit, toUnit: Unit) => number | null;
     searchQuery: string;
 }
 
-const unitOptions = ["kg", "g", "L", "mL", "units", "boxes", "pieces", "lb", "oz", "gallon (US)", "quart (US)", "pint (US)", "fluid oz (US)", "gallon (UK)", "quart (UK)", "pint (UK)", "fluid oz (UK)"];
+const unitOptions = UNIT_OPTIONS;
 
-const categoryOptions: Category[] = [
-    "dry",
-    "canned",
-    "other",
-    "fruit",
-    "vegetables",
-    "juices",
-    "dairy",
-    "meats",
-    "cooked meats",
-    "frozen vegetables",
-    "bread",
-    "desserts",
-    "soups",
-    "dressings",
-];
+// Local alias to keep the original variable name used throughout the
+// component without touching the JSX further below.
+const subcategoryOptions = SUBCATEGORY_OPTIONS;
 
 export const InventoryList: React.FC<InventoryListProps> = ({
     inventory,
@@ -68,8 +38,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editedName, setEditedName] = useState("");
     const [editedQuantity, setEditedQuantity] = useState<number | "">("");
-    const [editedUnit, setEditedUnit] = useState("");
-    const [editedCategory, setEditedCategory] = useState<Category>("other"); // Default category
+    const [editedUnit, setEditedUnit] = useState<Unit>(UNIT_OPTIONS[0]);
+    const [editedSubcategory, setEditedSubcategory] = useState<SubCategory>("other"); // Default category
 
     const filteredInventory = inventory.filter(item =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -80,7 +50,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         setEditedName(item.name);
         setEditedQuantity(item.quantity);
         setEditedUnit(item.unit);
-        setEditedCategory(item.category);
+        setEditedSubcategory(item.subcategory);
     };
 
     const cancelEditing = () => {
@@ -111,7 +81,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({
             name: editedName,
             quantity: editedQuantity,
             unit: editedUnit,
-            category: editedCategory,
+            subcategory: editedSubcategory,
+            category: getMainCategory(editedSubcategory as Category),
         });
         setEditingId(null);
         toast({
@@ -136,7 +107,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         other: [],
     });
 
-    const subcategories: { [key: string]: Category[] } = {
+    const subcategories: { [key: string]: SubCategory[] } = {
         cooler: ["fruit", "vegetables", "juices", "dairy"],
         freezer: ["meats", "cooked meats", "frozen vegetables", "bread", "desserts", "soups", "dressings"],
         dry: [],
@@ -144,7 +115,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         other: [],
     };
 
-    const categoryDisplayNames: { [key in Category]: string } = {
+    const categoryDisplayNames: Record<Category | SubCategory, string> = {
         cooler: "Cooler",
         freezer: "Freezer",
         dry: "Dry",
@@ -163,7 +134,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         dressings: "Dressings",
     };
 
-    function getMainCategory(category: Category): string {
+    function getMainCategory(category: Category): Category {
         if (["fruit", "vegetables", "juices", "dairy"].includes(category)) {
             return "cooler";
         } else if (["meats", "cooked meats", "frozen vegetables", "bread", "desserts", "soups", "dressings"].includes(category)) {
@@ -232,12 +203,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                     </TableCell>
                                     <TableCell>
                                         {editingId === item.id ? (
-                                            <Select onValueChange={setEditedUnit} defaultValue={editedUnit}>
+                                            <Select onValueChange={(v) => setEditedUnit(v as Unit)} defaultValue={editedUnit}>
                                                 <SelectTrigger className="w-[180px]">
                                                     <SelectValue placeholder="Select a unit" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {unitOptions.map((option) => (
+                                                    {unitOptions.map((option: string) => (
                                                         <SelectItem key={option} value={option}>
                                                             {option}
                                                         </SelectItem>
@@ -261,12 +232,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                     </TableCell>
                                     {editingId === item.id ? (
                                         <TableCell>
-                                            <Select onValueChange={setEditedCategory} defaultValue={editedCategory}>
+                                            <Select onValueChange={(v) => setEditedSubcategory(v as SubCategory)} defaultValue={editedSubcategory}>
                                                 <SelectTrigger className="w-[180px]">
                                                     <SelectValue placeholder="Select a category" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {categoryOptions.map((option) => (
+                                                    {(subcategoryOptions as Category[]).map((option) => (
                                                         <SelectItem key={option} value={option}>
                                                             {option}
                                                         </SelectItem>
@@ -317,15 +288,15 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                     </TableBody>
                 </Table>
             ) : (
-                <Accordion type="multiple" collapsible="true">
+                <Accordion type="multiple">
                     {Object.entries(groupedInventory).map(([mainCategory, items]) => {
                         const hasSubcategories = subcategories[mainCategory as keyof typeof subcategories].length > 0;
                         return (
                             <AccordionItem key={mainCategory} value={mainCategory}>
-                                <AccordionTrigger>{categoryDisplayNames[mainCategory as Category]}</AccordionTrigger>
+                                <AccordionTrigger>{categoryDisplayNames[mainCategory as SubCategory]}</AccordionTrigger>
                                 <AccordionContent>
                                     {hasSubcategories ? (
-                                        <Accordion type="multiple" collapsible="true">
+                                        <Accordion type="multiple">
                                             {subcategories[mainCategory as keyof typeof subcategories].map(subcategory => {
                                                 const subcategoryItems = items.filter(item => item.category === subcategory);
                                                 if (subcategoryItems.length === 0) {
@@ -333,10 +304,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                 }
                                                 return (
                                                     <AccordionItem key={subcategory} value={subcategory}>
-                                                        <AccordionTrigger>{categoryDisplayNames[subcategory as Category]}</AccordionTrigger>
+                                                        <AccordionTrigger>{categoryDisplayNames[subcategory as SubCategory]}</AccordionTrigger>
                                                         <AccordionContent>
                                                             <Table>
-                                                                <TableCaption>A list of your {categoryDisplayNames[subcategory as Category]} inventory items.</TableCaption>
+                                                                <TableCaption>A list of your {categoryDisplayNames[subcategory as SubCategory]} inventory items.</TableCaption>
                                                                 <TableHeader>
                                                                     <TableRow>
                                                                         <TableHead className="w-[100px]">Name</TableHead>
@@ -387,12 +358,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                                                 </TableCell>
                                                                                 <TableCell>
                                                                                     {editingId === item.id ? (
-                                                                                        <Select onValueChange={setEditedUnit} defaultValue={editedUnit}>
+                                                                                        <Select onValueChange={(v) => setEditedUnit(v as Unit)} defaultValue={editedUnit}>
                                                                                             <SelectTrigger className="w-[180px]">
                                                                                                 <SelectValue placeholder="Select a unit" />
                                                                                             </SelectTrigger>
                                                                                             <SelectContent>
-                                                                                                {unitOptions.map((option) => (
+                                                                                                {unitOptions.map((option: string) => (
                                                                                                     <SelectItem key={option} value={option}>
                                                                                                         {option}
                                                                                                     </SelectItem>
@@ -416,12 +387,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                                                 </TableCell>
                                                                                 {editingId === item.id ? (
                                                                                     <TableCell>
-                                                                                        <Select onValueChange={setEditedCategory} defaultValue={editedCategory}>
+                                                                                        <Select onValueChange={(v) => setEditedSubcategory(v as SubCategory)} defaultValue={editedSubcategory}>
                                                                                             <SelectTrigger className="w-[180px]">
                                                                                                 <SelectValue placeholder="Select a category" />
                                                                                             </SelectTrigger>
                                                                                             <SelectContent>
-                                                                                                {categoryOptions.map((option) => (
+                                                                                                {subcategoryOptions.map((option: SubCategory) => (
                                                                                                     <SelectItem key={option} value={option}>
                                                                                                         {option}
                                                                                                     </SelectItem>
@@ -478,7 +449,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                         </Accordion>
                                     ) : (
                                         <Table>
-                                            <TableCaption>A list of your {categoryDisplayNames[mainCategory as Category]} inventory items.</TableCaption>
+                                            <TableCaption>A list of your {categoryDisplayNames[mainCategory as SubCategory]} inventory items.</TableCaption>
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead className="w-[100px]">Name</TableHead>
@@ -529,12 +500,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                             </TableCell>
                                                             <TableCell>
                                                                 {editingId === item.id ? (
-                                                                    <Select onValueChange={setEditedUnit} defaultValue={editedUnit}>
+                                                                    <Select onValueChange={(v) => setEditedUnit(v as Unit)} defaultValue={editedUnit}>
                                                                         <SelectTrigger className="w-[180px]">
                                                                             <SelectValue placeholder="Select a unit" />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
-                                                                            {unitOptions.map((option) => (
+                                                                            {unitOptions.map((option: string) => (
                                                                                 <SelectItem key={option} value={option}>
                                                                                     {option}
                                                                                 </SelectItem>
@@ -558,12 +529,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                             </TableCell>
                                                             {editingId === item.id ? (
                                                                 <TableCell>
-                                                                    <Select onValueChange={setEditedCategory} defaultValue={editedCategory}>
+                                                                    <Select onValueChange={(v) => setEditedSubcategory(v as SubCategory)} defaultValue={editedSubcategory}>
                                                                         <SelectTrigger className="w-[180px]">
                                                                             <SelectValue placeholder="Select a category" />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
-                                                                            {categoryOptions.map((option) => (
+                                                                            {subcategoryOptions.map((option: SubCategory) => (
                                                                                 <SelectItem key={option} value={option}>
                                                                                     {option}
                                                                                 </SelectItem>

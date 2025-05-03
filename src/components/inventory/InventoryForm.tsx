@@ -6,49 +6,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { InventoryItemData } from "@/types/inventory";
-
-type Category =
-    | "cooler"
-    | "freezer"
-    | "dry"
-    | "canned"
-    | "other"
-    | "fruit"
-    | "vegetables"
-    | "juices"
-    | "dairy"
-    | "meats"
-    | "cooked meats"
-    | "frozen vegetables"
-    | "bread"
-    | "desserts"
-    | "soups"
-    | "dressings";
+import type { InventoryItemData, Unit, SubCategory } from "@/types/inventory";
+import { getMainCategory } from "@/types/inventory";
+import { on } from "events";
 
 interface InventoryFormProps {
     onAddItem: (item: InventoryItemData) => void;
-    unitOptions: string[];
-    categoryOptions: Category[];
-    defaultCategory: Category;
+    unitOptions: readonly Unit[];
+    subcategoryOptions: readonly SubCategory[];
+    defaultSubcategory: SubCategory;
 }
 
 export const InventoryForm: React.FC<InventoryFormProps> = ({
     onAddItem,
     unitOptions,
-    categoryOptions,
-    defaultCategory,
+    subcategoryOptions,
+    defaultSubcategory,
 }) => {
     const [name, setName] = useState("");
     const [quantity, setQuantity] = useState<number | "">("");
-    const [unit, setUnit] = useState(unitOptions[0]);
-    const [category, setCategory] = useState<Category>(defaultCategory);
-
+    const [unit, setUnit] = useState<Unit>(unitOptions[0]);
+    const [subcategory, setSubcategory] = useState<SubCategory>(defaultSubcategory);
 
     const handleSubmit = (event: React.FormEvent) => {
         event.preventDefault();
 
-        if (!name || quantity === "" || !unit || !category) {
+        if (!name || quantity === "" || !unit || !subcategory) {
             toast({
                 title: "Missing fields",
                 description: "Please fill in all fields.",
@@ -65,11 +48,11 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
             return;
         }
 
-        onAddItem({ name, quantity, unit, category });
+        onAddItem({ name, quantity, unit, subcategory, category: getMainCategory(subcategory) });
         setName("");
         setQuantity("");
         setUnit(unitOptions[0]);
-        setCategory(defaultCategory);
+        setSubcategory(defaultSubcategory);
         toast({
             title: "Item Added",
             description: `Added ${quantity} ${unit} of ${name} to inventory.`,
@@ -102,12 +85,12 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
             </div>
             <div>
                 <Label htmlFor="unit">Unit</Label>
-                <Select onValueChange={setUnit} defaultValue={unit}>
+                <Select onValueChange={(v) => setUnit(v as Unit)} defaultValue={unitOptions[0]}>
                     <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Select a unit" />
                     </SelectTrigger>
                     <SelectContent>
-                        {unitOptions.map((option) => (
+                        {unitOptions.map((option: string) => (
                             <SelectItem key={option} value={option}>
                                 {option}
                             </SelectItem>
@@ -117,12 +100,12 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
             </div>
             <div>
                 <Label htmlFor="category">Category</Label>
-                <Select onValueChange={setCategory} defaultValue={defaultCategory}>
+                <Select onValueChange={(v) => setSubcategory(v as SubCategory)} defaultValue={defaultSubcategory}>
                     <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                        {categoryOptions.map((option) => (
+                        {subcategoryOptions.map((option: SubCategory) => (
                             <SelectItem key={option} value={option}>
                                 {option}
                             </SelectItem>

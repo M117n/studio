@@ -4,19 +4,18 @@ import { useState } from "react";
 import { parse, unparse } from "papaparse";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
+import type { Dispatch, SetStateAction } from "react";
+import type { InventoryItem, SubCategory } from "@/types/inventory";
+import { getMainCategory } from "@/types/inventory";
+import { get } from "http";
 
-interface InventoryItem {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-}
+
 
 interface CsvImportExportProps {
   inventory: InventoryItem[];
-  setInventory: (inventory: InventoryItem[]) => void;
-  setChangeLog: (changeLog: string[]) => void;
-  setPreviousStates: (previousStates: InventoryItem[][]) => void;
+  setInventory: Dispatch<SetStateAction<InventoryItem[]>>;
+  setChangeLog: Dispatch<SetStateAction<string[]>>;
+  setPreviousStates: Dispatch<SetStateAction<InventoryItem[][]>>;
 }
 
 export const CsvImportExport: React.FC<CsvImportExportProps> = ({
@@ -49,7 +48,7 @@ export const CsvImportExport: React.FC<CsvImportExportProps> = ({
 
       parse(csvData, {
         header: true,
-        complete: (results) => {
+        complete: (results: Papa.ParseResult<any>) => {
           try {
             const importedData: InventoryItem[] = results.data
               .filter((row: any) => row.name && row.quantity && row.unit)
@@ -58,6 +57,8 @@ export const CsvImportExport: React.FC<CsvImportExportProps> = ({
                 name: row.name,
                 quantity: parseFloat(row.quantity),
                 unit: row.unit,
+                subcategory: row.subcategory as SubCategory,
+                category: getMainCategory(row.subcategory),
               }));
 
             setPreviousStates((prev) => [...prev, inventory]);
@@ -78,11 +79,11 @@ export const CsvImportExport: React.FC<CsvImportExportProps> = ({
             });
           }
         },
-        error: (error) => {
+        error: (error: Papa.ParseError) => {
           toast({
-            variant: "destructive",
-            title: "Import failed.",
+            title: "Parse error",
             description: `CSV parsing error: ${error.message}.`,
+            variant: "destructive",
           });
         },
       });

@@ -1,10 +1,60 @@
-export interface InventoryItemData {
+
+// ---------------------------------------------------------------------------
+// Centralised domain constants
+// ---------------------------------------------------------------------------
+
+export type Category = "cooler" | "freezer" | "dry" | "canned" | "other";
+
+export const CATEGORY_OPTIONS: readonly Category[] = [
+  "cooler",
+  "freezer",
+  "dry",
+  "canned",
+  "other",
+] as const;
+
+export type SubCategory =
+  | "fruit" | "vegetables" | "juices" | "dairy"
+  | "meats" | "cooked meats" | "frozen vegetables"
+  | "bread" | "desserts" | "soups" | "dressings"
+  | "dry" | "canned" | "other";
+
+export const SUBCATEGORY_OPTIONS: readonly SubCategory[] = [
+  "fruit","vegetables","juices","dairy",
+  "meats","cooked meats","frozen vegetables",
+  "bread","desserts","soups","dressings",
+  "dry","canned","other",
+] as const;
+
+export type Unit =
+  | "kg" | "g" | "lb" | "oz"
+  | "L" | "mL"
+  | "gallon (US)" | "quart (US)" | "pint (US)" | "fluid oz (US)"
+  | "gallon (UK)" | "quart (UK)" | "pint (UK)" | "fluid oz (UK)";
+
+  export const UNIT_OPTIONS: readonly Unit[] = [
+    "kg","g","lb","oz",
+    "L","mL",
+    "gallon (US)","quart (US)","pint (US)","fluid oz (US)",
+    "gallon (UK)","quart (UK)","pint (UK)","fluid oz (UK)",
+  ] as const;
+
+/* helper – import everywhere instead of re‑declaring */
+export const getMainCategory = (sub: SubCategory): Category => {
+  if (["fruit","vegetables","juices","dairy"].includes(sub)) return "cooler";
+  if (["meats","cooked meats","frozen vegetables","bread","desserts","soups","dressings"].includes(sub)) return "freezer";
+  if (sub === "dry")    return "dry";
+  if (sub === "canned") return "canned";
+  return "other";
+};
+
+export interface InventoryItem {
+  id: string;
   name: string;
   quantity: number;
-  unit: string;
-  category: string;
+  unit: Unit;
+  category: Category;
+  subcategory: SubCategory; 
 }
 
-export interface InventoryItem extends InventoryItemData {
-  id: string;
-}
+export type InventoryItemData = Omit<InventoryItem, "id">;

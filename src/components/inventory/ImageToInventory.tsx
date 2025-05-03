@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { ImageIcon } from "lucide-react";
 import {extractInventoryFromImage} from "@/ai/flows/extract-inventory-from-image";
-import type { InventoryItemData } from "@/types/inventory";
-
-type Category = "fruit" | "vegetable" | "canned" | "juices" | "dry" | "frozen" | "dairy" | "other";
+import type { InventoryItemData, Unit } from "@/types/inventory";
+import type { Category, SubCategory } from "@/types/inventory";
+import { getMainCategory } from "@/types/inventory";
 
 interface ImageToInventoryProps {
   onAddItem: (item: InventoryItemData) => void;
-  defaultCategory: Category;
+  defaultSubcategory: SubCategory;
 }
 
 export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
   onAddItem,
-    defaultCategory,
+    defaultSubcategory,
 }) => {
   const [image, setImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -56,7 +56,13 @@ export const ImageToInventory: React.FC<ImageToInventoryProps> = ({
       }
       // Add each recognized item to inventory
       inventoryItems.forEach((item) => {
-        onAddItem({ name: item.name, quantity: item.quantity, unit: item.unit, category: defaultCategory });
+        onAddItem({
+                    name: item.name,
+                    quantity: item.quantity,
+                    unit: item.unit as Unit,
+                    subcategory: defaultSubcategory,
+                    category: getMainCategory(defaultSubcategory),
+                  });
       });
       toast({
         title: "Analysis Complete",
