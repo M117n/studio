@@ -293,7 +293,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
             ) : (
                 <Accordion type="multiple">
                     {Object.entries(groupedInventory).map(([mainCategory, items]) => {
-                        const hasSubcategories = subcategories[mainCategory as keyof typeof subcategories].length > 0;
+                        const hasSubcategories = (subcategories[mainCategory as keyof typeof subcategories] ?? []).length > 0;
                         return (
                             <AccordionItem key={mainCategory} value={mainCategory}>
                                 <AccordionTrigger>{categoryDisplayNames[mainCategory as SubCategory]}</AccordionTrigger>
