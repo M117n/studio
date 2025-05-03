@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Firebase
 /smartstock-e8146-firebase-adminsdk-fbsvc-38e06d382c.json
+
+# tests
+/tests_results

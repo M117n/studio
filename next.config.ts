@@ -24,4 +24,4 @@ const pwaConfig = {
   // Disable PWA in non-production builds to prevent GenerateSW running multiple times in watch mode
   disable: !isProduction,
 };
-export default withPWA(pwaConfig)(nextConfig);
+export default withPWA({ ...pwaConfig, ...nextConfig });

@@ -3,14 +3,15 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { InventoryList } from '@/components/inventory/InventoryList';
+import type { InventoryItem, Unit, Category } from '@/types/inventory';
 
 describe('InventoryList integration', () => {
   const inventory = [
-    { id: '1', name: 'Apple', quantity: 5, unit: 'kg', category: 'fruit' as const },
+    { id: '1', name: 'Apple', quantity: 5, unit: 'kg' as Unit, category: 'cooler' as Category, subcategory: 'fruit' as const },
   ];
   const onDeleteItem = jest.fn();
   const onEditItem = jest.fn();
-  const defaultUnit = 'units';
+  const defaultUnit: Unit = 'kg';
   const convertUnits = (_value: number, _from: string, _to: string) => _value;
 
   it('renders inventory items when category is expanded', async () => {
