@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Smart Inventory',
+  title: 'Shawinv',
   description: 'Smart Inventory is a smart inventory management system that helps you keep track of your inventory in real-time.',
 };
 
