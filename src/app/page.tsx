@@ -23,6 +23,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Settings } from "lucide-react";
+import { AuthPanel } from '@/components/AuthPanel';
 
 // Key for offline operation queue in localStorage
 const QUEUE_KEY = "inventorySyncQueue";
@@ -409,8 +410,11 @@ export default function Home() {
 
     return (
         <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">StockWatch AI</h1>
-
+            <h1 className="text-2xl font-bold mb-4">Shawinv</h1>
+            {/* 🔐 Auth UI - Login/Register */}
+            <div className="mb-6">
+                <AuthPanel />
+            </div>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="ml-auto">

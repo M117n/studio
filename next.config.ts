@@ -4,15 +4,28 @@ validateEnv();
 import type {NextConfig} from 'next';
 import withPWA from 'next-pwa';
 
-const nextConfig: NextConfig = {
-  /* config options here */
-  reactStrictMode: true,
-  typescript: {
-    ignoreBuildErrors: true,
+const nextConfig: import('next').NextConfig = {
+    reactStrictMode: true,                                                                                                               
+    typescript: {                                                                                                                        
+      ignoreBuildErrors: true,                                                                                                           
+    },                                                                                                                                   
+    eslint: {                                                                                                                            
+      ignoreDuringBuilds: true,                                                                                                          
+    },                                                                                                                                   
+    async headers() {                                                                                                                    
+      return [
+        {
+          source: '/(.*)',
+          headers: [
+  {
+    key: 'Content-Security-Policy',
+    value:
+      "default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';",
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+          ],
+      },
+    ]; 
+  },        
 };
 
 // Wrap Next.js config with PWA support (enabled only in production to avoid multiple GenerateSW calls)
@@ -24,4 +37,5 @@ const pwaConfig = {
   // Disable PWA in non-production builds to prevent GenerateSW running multiple times in watch mode
   disable: !isProduction,
 };
+
 export default withPWA(pwaConfig)(nextConfig);
