@@ -9,8 +9,9 @@ type Ctx = { params: { id: string } };
 /* ------------------------------------------------------------------ *
  * PUT /api/inventory/:id  →  Actualiza un ítem de inventario
  * ------------------------------------------------------------------ */
-export async function PUT(req: NextRequest, ctx: Ctx) {
-  const id = ctx.params.id;
+export async function PUT(req: NextRequest, { params }: Ctx) {
+  // params may be a Promise in Next.js dynamic routes; await before accessing
+  const { id } = await params;
 
   let body: InventoryItemData;
   try {
@@ -51,12 +52,14 @@ export async function PUT(req: NextRequest, ctx: Ctx) {
 /* ------------------------------------------------------------------ *
  * DELETE /api/inventory/:id  →  Elimina un ítem de inventario
  * ------------------------------------------------------------------ */
-export async function DELETE(_: NextRequest, ctx: Ctx) {
-  const id = ctx.params.id;
+export async function DELETE(_: NextRequest, { params }: Ctx) {
+  // params may be a Promise in Next.js dynamic routes; await before accessing
+  const { id } = await params;
 
   try {
     await db.collection("inventory").doc(id).delete();
-    return NextResponse.json({ id }, { status: 204 }); // 204 No Content
+    // Return no content for successful deletion
+    return NextResponse.json(null, { status: 204 });
   } catch (err: any) {
     console.error("DELETE /api/inventory:", err);
     return NextResponse.json(

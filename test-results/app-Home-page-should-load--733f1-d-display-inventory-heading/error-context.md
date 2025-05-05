@@ -1,20 +1,25 @@
 # Test info
 
 - Name: Home page >> should load successfully and display inventory heading
-- Location: /mnt/c/users/martin/desktop/martin/full apps/smartstock/tests/e2e/app.spec.ts:4:7
+- Location: /mnt/c/users/martin/desktop/martin/full apps/shawinv/tests/e2e/app.spec.ts:4:7
 
 # Error details
 
 ```
-Error: browserType.launch: Executable doesn't exist at /home/martin/.cache/ms-playwright/chromium_headless_shell-1169/chrome-linux/headless_shell
-╔═════════════════════════════════════════════════════════════════════════╗
-║ Looks like Playwright Test or Playwright was just installed or updated. ║
-║ Please run the following command to download new browsers:              ║
-║                                                                         ║
-║     npx playwright install                                              ║
-║                                                                         ║
-║ <3 Playwright Team                                                      ║
-╚═════════════════════════════════════════════════════════════════════════╝
+Error: browserType.launch: 
+╔══════════════════════════════════════════════════════╗
+║ Host system is missing dependencies to run browsers. ║
+║ Please install them with the following command:      ║
+║                                                      ║
+║     sudo npx playwright install-deps                 ║
+║                                                      ║
+║ Alternatively, use apt:                              ║
+║     sudo apt-get install libnss3\                    ║
+║         libnspr4\                                    ║
+║         libasound2t64                                ║
+║                                                      ║
+║ <3 Playwright Team                                   ║
+╚══════════════════════════════════════════════════════╝
 ```
 
 # Test source
@@ -24,7 +29,7 @@ Error: browserType.launch: Executable doesn't exist at /home/martin/.cache/ms-pl
    2 |
    3 | test.describe('Home page', () => {
 >  4 |   test('should load successfully and display inventory heading', async ({ page }) => {
-     |       ^ Error: browserType.launch: Executable doesn't exist at /home/martin/.cache/ms-playwright/chromium_headless_shell-1169/chrome-linux/headless_shell
+     |       ^ Error: browserType.launch: 
    5 |     await page.goto('/');
    6 |     await expect(page).toHaveURL('/');
    7 |     // Adjust the selector/text to match your Inventory heading or element

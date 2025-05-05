@@ -25,7 +25,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Settings } from "lucide-react";
-import { AuthPanel } from '@/components/AuthPanel';
 
 // Key for offline operation queue in localStorage
 const QUEUE_KEY = "inventorySyncQueue";
@@ -45,8 +44,29 @@ const unitOptions     = UNIT_OPTIONS;
 
 
         
+import { AuthPanel } from '@/components/AuthPanel';
+import { useAuth } from '@/hooks/useAuth';
+
 export default function Home() {
-    const [inventory, setInventory] = useState<InventoryItem[]>(() => {
+  // Client-side auth gating (fallback for middleware issues)
+  const { isAuthenticated, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="container mx-auto p-4">
+        <p>Loading...</p>
+      </div>
+    );
+  }
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-4">Shawinv</h1>
+        <AuthPanel />
+      </div>
+    );
+  }
+  // Authenticated, show inventory
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => {
         if (typeof window !== "undefined") {
             const storedInventory = localStorage.getItem("inventory");
             return storedInventory ? JSON.parse(storedInventory) : [];
@@ -117,8 +137,26 @@ export default function Home() {
             try {
                 const res = await fetch("/api/inventory");
                 if (res.ok) {
-                    const data = await res.json();
-                    setInventory(data);
+                    const data: InventoryItem[] = await res.json();
+                    setInventory(prev => {
+                        const mergedMap = new Map<string, InventoryItem>();
+                        // Add server-fetched items
+                        data.forEach(item => mergedMap.set(item.id, item));
+                        // Preserve any local-only items that are not duplicates of server items
+                        prev.forEach(item => {
+                            if (!mergedMap.has(item.id)) {
+                                const isDuplicate = data.some(srv =>
+                                    srv.name === item.name &&
+                                    srv.quantity === item.quantity &&
+                                    srv.unit === item.unit &&
+                                    srv.category === item.category &&
+                                    srv.subcategory === item.subcategory
+                                );
+                                if (!isDuplicate) mergedMap.set(item.id, item);
+                            }
+                        });
+                        return Array.from(mergedMap.values());
+                    });
                 }
             } catch (e) {
                 console.error("Failed to fetch server inventory", e);
@@ -163,8 +201,26 @@ export default function Home() {
             try {
                 const res = await fetch("/api/inventory");
                 if (res.ok) {
-                    const data = await res.json();
-                    setInventory(data);
+                    const data: InventoryItem[] = await res.json();
+                    setInventory(prev => {
+                        const mergedMap = new Map<string, InventoryItem>();
+                        // Add server-fetched items
+                        data.forEach(item => mergedMap.set(item.id, item));
+                        // Preserve any local-only items that are not duplicates of server items
+                        prev.forEach(item => {
+                            if (!mergedMap.has(item.id)) {
+                                const isDuplicate = data.some(srv =>
+                                    srv.name === item.name &&
+                                    srv.quantity === item.quantity &&
+                                    srv.unit === item.unit &&
+                                    srv.category === item.category &&
+                                    srv.subcategory === item.subcategory
+                                );
+                                if (!isDuplicate) mergedMap.set(item.id, item);
+                            }
+                        });
+                        return Array.from(mergedMap.values());
+                    });
                 }
             } catch (e) {
                 console.error("Failed to refresh inventory:", e);
@@ -363,14 +419,11 @@ export default function Home() {
     // const filteredInventory = inventory.filter(item =>
     //     item.name.toLowerCase().includes(searchQuery.toLowerCase())
     // );
+    
 
     return (
         <div className="container mx-auto p-4">
             <h1 className="text-2xl font-bold mb-4">Shawinv</h1>
-            {/* 🔐 Auth UI - Login/Register */}
-            <div className="mb-6">
-                <AuthPanel />
-            </div>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="ml-auto">

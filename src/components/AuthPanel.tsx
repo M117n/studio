@@ -10,11 +10,15 @@ import {
 } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 
-export function AuthPanel() {
+interface AuthPanelProps {
+  initialMode?: 'login' | 'register';
+}
+
+export function AuthPanel({ initialMode = 'login' }: AuthPanelProps) {
   const [user, setUser] = useState(auth.currentUser);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -26,7 +30,15 @@ export function AuthPanel() {
     setError('');
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const idToken = await result.user.getIdToken();
+      await fetch('/api/auth/sessionLogin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      // Reload to update authentication state
+      window.location.reload();
     } catch (err: any) {
       setError(err.message);
     }
@@ -35,11 +47,20 @@ export function AuthPanel() {
   const handleAuth = async () => {
     setError('');
     try {
+      let userCredential;
       if (mode === 'login') {
-        await signInWithEmailAndPassword(auth, email, password);
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
       }
+      const idToken = await userCredential.user.getIdToken();
+      await fetch('/api/auth/sessionLogin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      // Reload to update authentication state
+      window.location.reload();
     } catch (err: any) {
       setError(err.message);
     }
@@ -47,6 +68,9 @@ export function AuthPanel() {
 
   const handleLogout = async () => {
     await signOut(auth);
+    await fetch('/api/auth/sessionLogout', { method: 'POST' });
+    // Reload to update authentication state
+    window.location.reload();
   };
 
   return (

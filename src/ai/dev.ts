@@ -1,1 +1,0 @@
-import '@/ai/flows/extract-inventory-from-image.ts';

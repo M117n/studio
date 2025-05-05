@@ -1,3 +1,4 @@
+import type { NextConfig } from 'next';
 import { validateEnv } from "./src/lib/validateEnv"; //
 validateEnv();
 
@@ -11,6 +12,15 @@ const withPWA = withPWAInit({
 
 const nextConfig: NextConfig = {
   /* config options here */
+  // Expose Firebase public config to the client
+  env: {
+    PUBLIC_FIREBASE_API_KEY: process.env.PUBLIC_FIREBASE_API_KEY,
+    PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
+    PUBLIC_FIREBASE_PROJECT_ID: process.env.PUBLIC_FIREBASE_PROJECT_ID,
+    PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.PUBLIC_FIREBASE_STORAGE_BUCKET,
+    PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+    PUBLIC_FIREBASE_APP_ID: process.env.PUBLIC_FIREBASE_APP_ID,
+  },
   reactStrictMode: true,
   typescript: {
     ignoreBuildErrors: true,
@@ -29,4 +39,4 @@ const pwaConfig = {
   // Disable PWA in non-production builds to prevent GenerateSW running multiple times in watch mode
   disable: !isProduction,
 };
-export default withPWA(pwaConfig)(nextConfig);
+export default (withPWA as any)(nextConfig);
