@@ -82,7 +82,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
             quantity: editedQuantity,
             unit: editedUnit,
             subcategory: editedSubcategory,
-            category: getMainCategory(editedSubcategory as Category),
+            category: getMainCategory(editedSubcategory),
         });
         setEditingId(null);
         toast({
@@ -136,20 +136,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         soups: "Soups",
         dressings: "Dressings",
     };
-
-    function getMainCategory(category: Category): Category {
-        if (["fruit", "vegetables", "juices", "dairy"].includes(category)) {
-            return "cooler";
-        } else if (["meats", "cooked meats", "frozen vegetables", "bread", "desserts", "soups", "dressings"].includes(category)) {
-            return "freezer";
-        } else if (category === "dry") {
-            return "dry";
-        } else if (category === "canned") {
-            return "canned";
-        } else {
-            return "other";
-        }
-    }
 
     return (
         <div className="overflow-x-auto">
