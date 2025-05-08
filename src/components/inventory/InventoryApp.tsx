@@ -59,8 +59,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import { Settings } from "lucide-react";
+import { Settings, LogOut, RotateCcw } from "lucide-react";
+import { auth } from "@/lib/firebaseClient";
+import { signOut } from "firebase/auth";
+import { useRouter } from "next/navigation";
 
 /* ------------------------------------------------------------------ */
 /*  Shared helpers                                                    */
@@ -130,9 +134,19 @@ export default function InventoryApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [subtractMode, setSubtractMode] = useState(false);
 
   /* ----------------------------- refs ----------------------------- */
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  /* -----------------------------logout ----------------------------- */
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/sessionLogout", { method: "POST" });
+    await signOut(auth);              // clear client‑side Firebase session
+    router.replace("/");              // go back to the auth page
+  };
 
   /* --------------------------- persistence ------------------------ */
   useEffect(() => {
@@ -204,6 +218,16 @@ export default function InventoryApp() {
     }
     fetchServer();
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (darkMode) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    }
+  }, [darkMode]);
 
   /* --------------------------- handlers --------------------------- */
   /** Add or merge an item */
@@ -312,9 +336,10 @@ export default function InventoryApp() {
 
   /* ----------------------------- UI ------------------------------ */
   return (
-    <div className="container mx-auto p-4 space-y-4">
+    <div className={`container mx-auto p-4 space-y-4 ${darkMode ? 'dark' : ''}`}>
       {/* Top‑bar ---------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <h1 className="text-2xl font-bold mr-4">Shawinv</h1>
         <Input
           ref={searchInputRef}
           placeholder="Search inventory…"
@@ -351,22 +376,29 @@ export default function InventoryApp() {
             </div>
 
             <div className="px-4 py-2 flex items-center justify-between">
-              <Label htmlFor="darkMode">Dark Mode</Label>
+              <Label htmlFor="darkMode" className="text-sm font-medium">Dark Mode</Label>
               <Switch
                 id="darkMode"
                 checked={darkMode}
                 onCheckedChange={setDarkMode}
               />
             </div>
+            
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Logout</span>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
       {/* Tabs ------------------------------------------------------- */}
       <Tabs defaultValue="inventory" className="w-full space-y-4">
-        <TabsList className="w-full overflow-x-auto">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 gap-1">
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="add">Add</TabsTrigger>
+          <TabsTrigger value="add" onClick={() => setSubtractMode(false)}>Add Item</TabsTrigger>
+          <TabsTrigger value="subtract" onClick={() => setSubtractMode(true)}>Subtract</TabsTrigger>
           <TabsTrigger value="changelog">Log</TabsTrigger>
           <TabsTrigger value="importexport">CSV</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
@@ -374,8 +406,11 @@ export default function InventoryApp() {
 
         <TabsContent value="inventory">
           <Card>
-            <CardHeader>
-              <CardTitle>Inventory</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Current Inventory</CardTitle>
+              <Button variant="outline" size="sm" onClick={undoLastChange} disabled={previousStates.length === 0}>
+                <RotateCcw className="mr-2 h-4 w-4" /> Undo
+              </Button>
             </CardHeader>
             <CardContent>
               <InventoryList
@@ -385,6 +420,8 @@ export default function InventoryApp() {
                 defaultUnit={defaultUnit}
                 convertUnits={convertUnits}
                 searchQuery={searchQuery}
+                subcategoryOptions={subcategoryOptions}
+                unitOptions={unitOptions}
               />
             </CardContent>
           </Card>
@@ -476,17 +513,6 @@ export default function InventoryApp() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Undo button ------------------------------------------------ */}
-      {previousStates.length > 0 && (
-        <Button
-          variant="outline"
-          onClick={undoLastChange}
-          className="mt-2 w-full sm:w-auto"
-        >
-          Undo last change
-        </Button>
-      )}
     </div>
   );
 }
