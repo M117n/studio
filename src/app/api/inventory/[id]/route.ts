@@ -1,17 +1,16 @@
-// src/app/api/inventory/[id]/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/firebaseAdmin";
 import type { InventoryItem, InventoryItemData } from "@/types/inventory";
 
-// Shape del contexto que Next pasa como 2º argumento
-type Ctx = { params: { id: string } };
-
 /* ------------------------------------------------------------------ *
  * PUT /api/inventory/:id  →  Actualiza un ítem de inventario
  * ------------------------------------------------------------------ */
-export async function PUT(req: NextRequest, { params }: Ctx) {
-  // params may be a Promise in Next.js dynamic routes; await before accessing
-  const { id } = await params;
+
+export async function PUT(
+  req: NextRequest,
+  { params }: any,
+) {
+  const { id } = params as { id: string };
 
   let body: InventoryItemData;
   try {
@@ -52,18 +51,35 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
 /* ------------------------------------------------------------------ *
  * DELETE /api/inventory/:id  →  Elimina un ítem de inventario
  * ------------------------------------------------------------------ */
-export async function DELETE(_: NextRequest, { params }: Ctx) {
-  // params may be a Promise in Next.js dynamic routes; await before accessing
-  const { id } = await params;
+
+export async function DELETE(
+  _req: NextRequest,
+  context: { params: { id: string } | Promise<{ id: string }> },
+) {
+  // Properly await params if it's a promise
+  const params = await Promise.resolve(context.params);
+  const id = params.id;
+  
+  if (!id) {
+    return NextResponse.json(
+      { error: "Missing inventory item ID" },
+      { status: 400 }
+    );
+  }
 
   try {
-    await db.collection("inventory").doc(id).delete();
-    // Return no content for successful deletion
-    return NextResponse.json(null, { status: 204 });
-  } catch (err: any) {
-    console.error("DELETE /api/inventory:", err);
+    await db.collection('inventory').doc(id).delete();
+    
+    // Return an empty response with status 200 for better client compatibility
+    // This ensures the client knows the operation was successful
     return NextResponse.json(
-      { error: err.message || "Failed to delete inventory item" },
+      { success: true, id },
+      { status: 200 }
+    );
+  } catch (err: any) {
+    console.error('DELETE /api/inventory:', err);
+    return NextResponse.json(
+      { error: err.message ?? 'Failed to delete inventory item' },
       { status: 500 },
     );
   }

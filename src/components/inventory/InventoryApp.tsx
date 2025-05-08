@@ -177,12 +177,19 @@ export default function InventoryApp() {
 
     try {
       for (const op of queue) {
-        await fetch("/api/inventory", {
+        // Determine the correct endpoint depending on the HTTP verb
+        let url = "/api/inventory";
+        if ((op.method === "PUT" || op.method === "DELETE") && op.body?.id) {
+          url += `/${op.body.id}`;
+        }
+
+        await fetch(url, {
           method: op.method,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(op.body),
+          body: op.method === "DELETE" ? undefined : JSON.stringify(op.body),
         });
       }
+      // All operations succeeded – clear the queue
       localStorage.removeItem(QUEUE_KEY);
       toast({ title: "Offline changes synced." });
     } catch (err) {
@@ -255,6 +262,8 @@ export default function InventoryApp() {
         method: "PUT",
         body: { id: existing.id, quantity: updated[existingIdx].quantity },
       });
+      // Attempt immediate sync while online
+      processQueue();
     } else {
       const newItem: InventoryItem = { ...item, id: crypto.randomUUID() };
       setInventory([...inventory, newItem]);
@@ -263,6 +272,7 @@ export default function InventoryApp() {
         `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} of ${item.name}.`,
       ]);
       enqueueOp({ method: "POST", body: newItem });
+      processQueue();
     }
   };
 
@@ -307,6 +317,9 @@ export default function InventoryApp() {
       `${new Date().toLocaleString()} - Edited ${original.name}.`,
     ]);
     enqueueOp({ method: "PUT", body: next[idx] });
+    processQueue();
+      // Attempt immediate sync when online
+      processQueue();
   };
 
   /** Delete an item */
@@ -320,6 +333,8 @@ export default function InventoryApp() {
       `${new Date().toLocaleString()} - Deleted ${target.name}.`,
     ]);
     enqueueOp({ method: "DELETE", body: { id } });
+    processQueue();
+    processQueue();
   };
 
   /** Undo last change */
