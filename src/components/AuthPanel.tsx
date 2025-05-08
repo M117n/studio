@@ -9,6 +9,7 @@ import {
   signOut,
 } from 'firebase/auth';
 import { useEffect, useState } from 'react';
+import { useRouter } from "next/navigation";
 
 interface AuthPanelProps {
   initialMode?: 'login' | 'register';
@@ -20,6 +21,7 @@ export function AuthPanel({ initialMode = 'login' }: AuthPanelProps) {
   const [password, setPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
   const [error, setError] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(setUser);
@@ -43,6 +45,10 @@ export function AuthPanel({ initialMode = 'login' }: AuthPanelProps) {
       setError(err.message);
     }
   };
+
+  useEffect(() => {
+    if (user) router.replace("/");
+  }, [user, router]);
 
   const handleAuth = async () => {
     setError('');
@@ -75,14 +81,8 @@ export function AuthPanel({ initialMode = 'login' }: AuthPanelProps) {
 
   return (
     <div className="max-w-sm mx-auto p-4 border rounded shadow space-y-4">
-      {user ? (
-        <div className="space-y-2">
-          <p>Bienvenido, {user.email || user.displayName}</p>
-          <button onClick={handleLogout} className="bg-red-500 text-white px-4 py-2 rounded">
-            Logout
-          </button>
-        </div>
-      ) : (
+      {/* Go to the home page if user is logged in */}
+      {!user && (
         <>
           <h2 className="text-xl font-semibold text-center">
             {mode === 'login' ? 'Iniciar Sesión' : 'Crear Cuenta'}

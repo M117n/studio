@@ -19,6 +19,8 @@ interface InventoryListProps {
     defaultUnit: Unit;
     convertUnits: (value: number, fromUnit: Unit, toUnit: Unit) => number | null;
     searchQuery: string;
+    subcategoryOptions: readonly SubCategory[];
+    unitOptions: readonly Unit[];
 }
 
 const unitOptions = UNIT_OPTIONS;
@@ -34,12 +36,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     defaultUnit,
     convertUnits,
     searchQuery,
+    subcategoryOptions,
+    unitOptions,
 }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editedName, setEditedName] = useState("");
     const [editedQuantity, setEditedQuantity] = useState<number | "">("");
     const [editedUnit, setEditedUnit] = useState<Unit>(UNIT_OPTIONS[0]);
-    const [editedSubcategory, setEditedSubcategory] = useState<SubCategory>("other"); // Default category
+    const [editedSubcategory, setEditedSubcategory] = useState<SubCategory>(subcategoryOptions[0]); // Default category
 
     const filteredInventory = inventory.filter(item =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase())

@@ -23,6 +23,8 @@ describe('InventoryList integration', () => {
         onEditItem={onEditItem}
         defaultUnit={defaultUnit}
         convertUnits={convertUnits}
+        subcategoryOptions={[]}
+        unitOptions={[]}
         searchQuery=""
       />
     );
