@@ -10,10 +10,17 @@ const withPWA = withPWAInit({
   disable: process.env.NODE_ENV !== 'production',
 });
 
+// Determinar si estamos en producción
+const isProduction = process.env.NODE_ENV === 'production';
+console.log(`Building for ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} environment`);
+
 const nextConfig: NextConfig = {
   /* config options here */
   // Expose Firebase public config to the client
   env: {
+    // Establecer una variable NEXT_PUBLIC_ENV para que el cliente sepa en qué entorno está
+    NEXT_PUBLIC_ENV: isProduction ? 'production' : 'development',
+    // Exponer variables de Firebase al cliente
     PUBLIC_FIREBASE_API_KEY: process.env.PUBLIC_FIREBASE_API_KEY,
     PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.PUBLIC_FIREBASE_AUTH_DOMAIN,
     PUBLIC_FIREBASE_PROJECT_ID: process.env.PUBLIC_FIREBASE_PROJECT_ID,
@@ -31,7 +38,6 @@ const nextConfig: NextConfig = {
 };
 
 // Wrap Next.js config with PWA support (enabled only in production to avoid multiple GenerateSW calls)
-const isProduction = process.env.NODE_ENV === 'production';
 const pwaConfig = {
   dest: 'public',
   register: true,
