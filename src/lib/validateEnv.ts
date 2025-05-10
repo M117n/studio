@@ -16,4 +16,5 @@ const requiredVars = [
         "Set them in .env.local / Vercel project settings before starting the app."
       );
     }
-  }  
+  } 
+  
