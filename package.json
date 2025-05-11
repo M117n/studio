@@ -6,8 +6,8 @@
     "dev": "cross-env NODE_ENV=development next dev -p 9002",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "cross-env NODE_ENV=production node --no-deprecation next build",
-    "start": "node --no-deprecation node_modules/.bin/next start",
+    "build": "cross-env NODE_ENV=production next build",
+    "start": "cross-env NODE_ENV=production next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:integration && npm run test:types && npm run test:e2e",
@@ -86,6 +86,7 @@
     "tailwindcss": "^3.4.1",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.19.4",
     "typescript": "^5"
   }
 }

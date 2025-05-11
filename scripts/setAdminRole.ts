@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { initializeApp, credential, auth } from "firebase-admin";
+import * as admin from "firebase-admin";
 import * as readline from "readline";
 
-initializeApp({
-  credential: credential.applicationDefault(),
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(),
 });
 
 const rl = readline.createInterface({
@@ -13,7 +13,7 @@ const rl = readline.createInterface({
 
 rl.question("Enter UID to promote to admin: ", async (uid) => {
   try {
-    await auth().setCustomUserClaims(uid.trim(), { role: "admin" });
+    await admin.auth().setCustomUserClaims(uid.trim(), { role: "admin" });
     console.log(`✅ User ${uid} is now an admin.`);
   } catch (e) {
     console.error("❌ Failed:", e);
