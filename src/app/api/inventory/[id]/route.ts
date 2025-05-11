@@ -1,86 +1,87 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { db } from "@/lib/firebaseAdmin";
-import type { InventoryItem, InventoryItemData } from "@/types/inventory";
+import { NextRequest, NextResponse } from 'next/server';
+import { db, adminAuth } from '@/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
+import type { InventoryItemData } from '@/types/inventory';
+import type { ChangeLogEntry } from '@/types/changeLog';
 
-/* ------------------------------------------------------------------ *
- * PUT /api/inventory/:id  →  Actualiza un ítem de inventario
- * ------------------------------------------------------------------ */
-
-export async function PUT(
-  req: NextRequest,
-  { params }: any,
-) {
-  const { id } = params as { id: string };
-
-  let body: InventoryItemData;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid JSON" },
-      { status: 400 },
-    );
-  }
-
-  const { name, quantity, unit, category, subcategory } = body;
-  if (
-    typeof name !== "string" ||
-    typeof quantity !== "number" ||
-    typeof unit !== "string" ||
-    typeof category !== "string" ||
-    typeof subcategory !== "string"
-  ) {
-    return NextResponse.json(
-      { error: "Invalid inventory item data" },
-      { status: 400 },
-    );
-  }
-
-  try {
-    await db.collection("inventory").doc(id).update(body);
-    return NextResponse.json({ id, ...body } as InventoryItem, { status: 200 });
-  } catch (err: any) {
-    console.error("PUT /api/inventory:", err);
-    return NextResponse.json(
-      { error: err.message || "Failed to update inventory item" },
-      { status: 500 },
-    );
-  }
+/* -------------------- helpers ---------------------------------- */
+function itemRef(id: string) {
+  return db.collection('inventory').doc(id);
+}
+function logRef(uid: string) {
+  return db.collection('changeLogs').doc(uid).collection('events').doc();
 }
 
-/* ------------------------------------------------------------------ *
- * DELETE /api/inventory/:id  →  Elimina un ítem de inventario
- * ------------------------------------------------------------------ */
-
-export async function DELETE(
+/* -------------------- GET /api/inventory/[id] ------------------ */
+export async function GET(
   _req: NextRequest,
-  context: { params: { id: string } | Promise<{ id: string }> },
+  { params }: { params: { id: string } },
 ) {
-  // Properly await params if it's a promise
-  const params = await Promise.resolve(context.params);
-  const id = params.id;
-  
-  if (!id) {
-    return NextResponse.json(
-      { error: "Missing inventory item ID" },
-      { status: 400 }
-    );
+  const snap = await itemRef(params.id).get();
+  if (!snap.exists) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+  return NextResponse.json({ id: snap.id, ...(snap.data() as InventoryItemData) });
+}
 
-  try {
-    await db.collection('inventory').doc(id).delete();
-    
-    // Return an empty response with status 200 for better client compatibility
-    // This ensures the client knows the operation was successful
-    return NextResponse.json(
-      { success: true, id },
-      { status: 200 }
-    );
-  } catch (err: any) {
-    console.error('DELETE /api/inventory:', err);
-    return NextResponse.json(
-      { error: err.message ?? 'Failed to delete inventory item' },
-      { status: 500 },
-    );
+/* -------------------- PATCH /api/inventory/[id] ---------------- */
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const token = req.headers.get('cookie')?.match(/session=([^;]+)/)?.[1] ?? '';
+  const { uid } = await adminAuth.verifySessionCookie(token, true);
+
+  const patch = await req.json();                // validate in real life
+  const batch = db.batch();
+
+  batch.update(itemRef(params.id), patch);
+
+  const log: ChangeLogEntry = {
+    timestamp : FieldValue.serverTimestamp(),
+    userId    : uid,
+    action    : 'UPDATE',
+    name      : patch.name,
+    category  : patch.category,
+    subcategory: patch.subcategory,
+    quantity  : patch.quantity,
+    unit      : patch.unit,
+  };
+  batch.set(logRef(uid), log);
+
+  await batch.commit();
+  return NextResponse.json({ ok: true });
+}
+
+/* ------------------ DELETE /api/inventory/[id] ----------------- */
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: { id: string } },
+) {
+  const token = req.headers.get('cookie')?.match(/session=([^;]+)/)?.[1] ?? '';
+  const { uid } = await adminAuth.verifySessionCookie(token, true);
+
+  const snap = await itemRef(params.id).get();
+  if (!snap.exists) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
+  const data = snap.data() as InventoryItemData;
+
+  const batch = db.batch();
+  batch.delete(itemRef(params.id));
+
+  const log: ChangeLogEntry = {
+    timestamp : FieldValue.serverTimestamp(),
+    userId    : uid,
+    action    : 'DELETE',
+    name      : data.name,
+    category  : data.category,
+    subcategory: data.subcategory,
+    quantity  : data.quantity,
+    unit      : data.unit,
+  };
+  batch.set(logRef(uid), log);
+
+  await batch.commit();
+  return NextResponse.json({ ok: true });
 }

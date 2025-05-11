@@ -1,23 +1,14 @@
 // components/inventory/InventoryApp.tsx
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { InventoryList } from "@/components/inventory/InventoryList";
 import { InventoryForm } from "@/components/inventory/InventoryForm";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
-import type {
-  InventoryItem,
-  Category,
-  Unit,
-  SubCategory,
-} from "@/types/inventory";
-import {
-  SUBCATEGORY_OPTIONS,
-  CATEGORY_OPTIONS,
-  UNIT_OPTIONS,
-} from "@/types/inventory";
+import type { InventoryItem, Unit, SubCategory } from "@/types/inventory";
+import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS } from "@/types/inventory";
 import { convertUnits } from "@/lib/unitConversion";
 
 import {
@@ -59,78 +50,48 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Settings, LogOut, RotateCcw } from "lucide-react";
 import { auth } from "@/lib/firebaseClient";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
+import { useInventory } from "@/hooks/useInventory";
+
 /* ------------------------------------------------------------------ */
-/*  Shared helpers                                                    */
+/*  Constants                                                         */
 /* ------------------------------------------------------------------ */
 
-/** Local‑storage key that queues offline ops for later sync */
-const QUEUE_KEY = "inventorySyncQueue";
-
-function enqueueOp(op: unknown) {
-  if (typeof window === "undefined") return;
-  const qRaw = localStorage.getItem(QUEUE_KEY);
-  const queue = qRaw ? JSON.parse(qRaw) : [];
-  queue.push(op);
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-}
-
-const categoryOptions = CATEGORY_OPTIONS;
-const subcategoryOptions = SUBCATEGORY_OPTIONS;
 const unitOptions = UNIT_OPTIONS;
+const subcategoryOptions = SUBCATEGORY_OPTIONS;
 
 /* ------------------------------------------------------------------ */
-/*  Main component                                                    */
+/*  Component                                                         */
 /* ------------------------------------------------------------------ */
 
 export default function InventoryApp() {
-  /* ----------------------------- state ---------------------------- */
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("inventory");
-      return stored ? JSON.parse(stored) : [];
-    }
-    return [];
-  });
+  /* ----------------------------- data ---------------------------- */
+  const {
+    inventory,
+    loading: inventoryLoading,
+    addItem:   addItemDb,
+    editItem:  editItemDb,
+    deleteItem: deleteItemDb,
+  } = useInventory();
 
-  const [changeLog, setChangeLog] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("changeLog");
-      return stored ? JSON.parse(stored) : [];
-    }
-    return [];
-  });
-
-  const [previousStates, setPreviousStates] = useState<InventoryItem[][]>([]);
-
-  const [defaultUnit, setDefaultUnit] = useState<Unit>(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("defaultUnit");
-      return stored && UNIT_OPTIONS.includes(stored as Unit)
-        ? (stored as Unit)
-        : "kg";
-    }
-    return "kg";
-  });
-
-  const [defaultSubcategory, setDefaultSubcategory] = useState<SubCategory>(
-    () => {
-      if (typeof window !== "undefined") {
-        const stored = localStorage.getItem("defaultSubCategory");
-        return stored && subcategoryOptions.includes(stored as SubCategory)
-          ? (stored as SubCategory)
-          : "other";
-      }
-      return "other";
-    },
+  /* ------------------------- local state ------------------------- */
+  const [changeLog, setChangeLog] = useState<string[]>(() =>
+    JSON.parse(localStorage.getItem("changeLog") ?? "[]"),
   );
-
+  const [previousStates, setPreviousStates] = useState<InventoryItem[][]>([]);
+  const [defaultUnit, setDefaultUnit] = useState<Unit>(
+    () => (localStorage.getItem("defaultUnit") as Unit) || "kg",
+  );
+  const [defaultSubcategory, setDefaultSubcategory] = useState<SubCategory>(
+    () =>
+      (localStorage.getItem("defaultSubCategory") as SubCategory) || "other",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
@@ -139,111 +100,31 @@ export default function InventoryApp() {
   /* ----------------------------- refs ----------------------------- */
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  /* -----------------------------logout ----------------------------- */
+  /* ------------------------ auth helpers ------------------------- */
   const router = useRouter();
-
   const handleLogout = async () => {
     await fetch("/api/auth/sessionLogout", { method: "POST" });
-    await signOut(auth);              // clear client‑side Firebase session
-    router.replace("/");              // go back to the auth page
+    await signOut(auth);
+    router.replace("/");
   };
 
-  /* --------------------------- persistence ------------------------ */
-  useEffect(() => {
-    localStorage.setItem("inventory", JSON.stringify(inventory));
-  }, [inventory]);
-
-  useEffect(() => {
-    localStorage.setItem("changeLog", JSON.stringify(changeLog));
-  }, [changeLog]);
-
-  useEffect(() => {
-    localStorage.setItem("defaultUnit", defaultUnit);
-  }, [defaultUnit]);
-
-  useEffect(() => {
-    localStorage.setItem("defaultSubCategory", defaultSubcategory);
-  }, [defaultSubcategory]);
-
-  /* --------------------------- networking ------------------------- */
-  /** Sync queued operations when back online */
-  const processQueue = useCallback(async () => {
-    if (typeof window === "undefined" || !navigator.onLine) return;
-
-    const qRaw = localStorage.getItem(QUEUE_KEY);
-    if (!qRaw) return;
-    const queue: any[] = JSON.parse(qRaw);
-    if (!queue.length) return;
-
-    try {
-      for (const op of queue) {
-        // Determine the correct endpoint depending on the HTTP verb
-        let url = "/api/inventory";
-        if ((op.method === "PUT" || op.method === "DELETE") && op.body?.id) {
-          url += `/${op.body.id}`;
-        }
-
-        await fetch(url, {
-          method: op.method,
-          headers: { "Content-Type": "application/json" },
-          body: op.method === "DELETE" ? undefined : JSON.stringify(op.body),
-        });
-      }
-      // All operations succeeded – clear the queue
-      localStorage.removeItem(QUEUE_KEY);
-      toast({ title: "Offline changes synced." });
-    } catch (err) {
-      console.error("Sync failed, keeping queue:", err);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("online", processQueue);
-    processQueue();
-    return () => window.removeEventListener("online", processQueue);
-  }, [processQueue]);
-
-  /** Initial load / refresh from server */
-  useEffect(() => {
-    async function fetchServer() {
-      try {
-        const res = await fetch("/api/inventory");
-        if (res.ok) {
-          const data: InventoryItem[] = await res.json();
-          setInventory((prev) => {
-            const merged = new Map<string, InventoryItem>();
-            data.forEach((item) => merged.set(item.id, item));
-            prev.forEach((item) => {
-              if (!merged.has(item.id)) merged.set(item.id, item);
-            });
-            return Array.from(merged.values());
-          });
-        }
-      } catch (e) {
-        console.error("Failed to fetch inventory:", e);
-      }
-    }
-    fetchServer();
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (darkMode) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
-    }
-  }, [darkMode]);
+  /* ----------------------- local persistence --------------------- */
+  useEffect(() => localStorage.setItem("changeLog", JSON.stringify(changeLog)), [changeLog]);
+  useEffect(() => localStorage.setItem("defaultUnit", defaultUnit), [defaultUnit]);
+  useEffect(
+    () => localStorage.setItem("defaultSubCategory", defaultSubcategory),
+    [defaultSubcategory],
+  );
 
   /* --------------------------- handlers --------------------------- */
-  /** Add or merge an item */
+  /** Add or merge (or subtract) an item */
   const addItem = (item: Omit<InventoryItem, "id">) => {
-    const existingIdx = inventory.findIndex((i) => i.name === item.name);
-    if (existingIdx > -1) {
-      const existing = inventory[existingIdx];
-      const converted = convertUnits(item.quantity, item.unit, existing.unit);
-      if (converted === null) {
+    const delta = subtractMode ? -item.quantity : item.quantity;
+    const existing = inventory.find((i) => i.name === item.name);
+
+    if (existing) {
+      const conv = convertUnits(delta, item.unit, existing.unit);
+      if (conv === null) {
         toast({
           variant: "destructive",
           title: "Conversion not possible",
@@ -251,110 +132,88 @@ export default function InventoryApp() {
         });
         return;
       }
-      const updated = [...inventory];
-      updated[existingIdx].quantity += converted;
-      setInventory(updated);
-      setChangeLog([
-        ...changeLog,
-        `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} (converted to ${converted} ${existing.unit}) to ${item.name}.`,
+      editItemDb({ id: existing.id, quantity: existing.quantity + conv });
+      setChangeLog((cl) => [
+        ...cl,
+        `${new Date().toLocaleString()} - ${
+          subtractMode ? "Subtracted" : "Added"
+        } ${item.quantity} ${item.unit} (→ ${conv} ${existing.unit}) ${
+          subtractMode ? "from" : "to"
+        } ${existing.name}.`,
       ]);
-      enqueueOp({
-        method: "PUT",
-        body: { id: existing.id, quantity: updated[existingIdx].quantity },
-      });
-      // Attempt immediate sync while online
-      processQueue();
     } else {
-      const newItem: InventoryItem = { ...item, id: crypto.randomUUID() };
-      setInventory([...inventory, newItem]);
-      setChangeLog([
-        ...changeLog,
+      addItemDb({ ...item, quantity: delta });
+      setChangeLog((cl) => [
+        ...cl,
         `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} of ${item.name}.`,
       ]);
-      enqueueOp({ method: "POST", body: newItem });
-      processQueue();
     }
   };
 
-  /** Edit an existing item */
-  const editItem = (id: string, updated: Partial<InventoryItem>) => {
-    const idx = inventory.findIndex((i) => i.id === id);
-    if (idx === -1) {
-      toast({
-        variant: "destructive",
-        title: "Item not found",
-        description: "The item you are trying to edit does not exist.",
-      });
-      return;
-    }
+  /** Edit */
+  const editItem = (id: string, patch: Partial<InventoryItem>) => {
+    const original = inventory.find((i) => i.id === id);
+    if (!original) return;
 
-    const original = inventory[idx];
-    const converted = convertUnits(
-      updated.quantity ?? original.quantity,
-      updated.unit ?? original.unit,
-      original.unit,
-    );
-    if (converted === null) {
+    const conv = patch.quantity
+      ? convertUnits(patch.quantity, patch.unit ?? original.unit, original.unit)
+      : undefined;
+    if (patch.quantity && conv === null) {
       toast({
         variant: "destructive",
         title: "Conversion not possible",
-        description: `Cannot convert units for ${original.name}.`,
       });
       return;
     }
 
-    const next = [...inventory];
-    next[idx] = {
-      ...original,
-      ...updated,
-      quantity: converted,
-      unit: original.unit,
-    };
-    setPreviousStates([...previousStates, inventory]);
-    setInventory(next);
-    setChangeLog([
-      ...changeLog,
+    setPreviousStates((ps) => [...ps, inventory]);
+    editItemDb({ id, ...patch, quantity: conv ?? original.quantity });
+    setChangeLog((cl) => [
+      ...cl,
       `${new Date().toLocaleString()} - Edited ${original.name}.`,
     ]);
-    enqueueOp({ method: "PUT", body: next[idx] });
-    processQueue();
-      // Attempt immediate sync when online
-      processQueue();
   };
 
-  /** Delete an item */
+  /** Delete */
   const deleteItem = (id: string) => {
     const target = inventory.find((i) => i.id === id);
     if (!target) return;
-    setPreviousStates([...previousStates, inventory]);
-    setInventory(inventory.filter((i) => i.id !== id));
-    setChangeLog([
-      ...changeLog,
+    setPreviousStates((ps) => [...ps, inventory]);
+    deleteItemDb(id);
+    setChangeLog((cl) => [
+      ...cl,
       `${new Date().toLocaleString()} - Deleted ${target.name}.`,
     ]);
-    enqueueOp({ method: "DELETE", body: { id } });
-    processQueue();
-    processQueue();
   };
 
-  /** Undo last change */
+  /** Undo (by replaying the snapshot into Firestore) */
   const undoLastChange = () => {
     if (!previousStates.length) return;
     const prev = previousStates[previousStates.length - 1];
-    setPreviousStates(previousStates.slice(0, -1));
-    setInventory(prev);
-    setChangeLog([
-      ...changeLog,
+    prev.forEach(({ id, ...rest }) => editItemDb({ id, ...rest }));
+    inventory
+      .filter((i) => !prev.some((p) => p.id === i.id))
+      .forEach((i) => deleteItemDb(i.id));
+    setPreviousStates((ps) => ps.slice(0, -1));
+    setChangeLog((cl) => [
+      ...cl,
       `${new Date().toLocaleString()} - Undo last change.`,
     ]);
   };
 
-  /* ----------------------------- UI ------------------------------ */
+  /* --------------------------- effects --------------------------- */
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
+
+  /* ------------------------------ UI ----------------------------- */
+  if (inventoryLoading) return <p className="p-4">Loading inventory…</p>;
+
   return (
-    <div className={`container mx-auto p-4 space-y-4 ${darkMode ? 'dark' : ''}`}>
-      {/* Top‑bar ---------------------------------------------------- */}
+    <div className={`container mx-auto p-4 space-y-4 ${darkMode ? "dark" : ""}`}>
+      {/* Top bar ---------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-      <h1 className="text-2xl font-bold mr-4">Shawinv</h1>
+        <h1 className="text-2xl font-bold mr-4">Shawinv</h1>
         <Input
           ref={searchInputRef}
           placeholder="Search inventory…"
@@ -391,14 +250,12 @@ export default function InventoryApp() {
             </div>
 
             <div className="px-4 py-2 flex items-center justify-between">
-              <Label htmlFor="darkMode" className="text-sm font-medium">Dark Mode</Label>
-              <Switch
-                id="darkMode"
-                checked={darkMode}
-                onCheckedChange={setDarkMode}
-              />
+              <Label htmlFor="darkMode" className="text-sm font-medium">
+                Dark Mode
+              </Label>
+              <Switch id="darkMode" checked={darkMode} onCheckedChange={setDarkMode} />
             </div>
-            
+
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
@@ -412,19 +269,30 @@ export default function InventoryApp() {
       <Tabs defaultValue="inventory" className="w-full space-y-4">
         <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 gap-1">
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
-          <TabsTrigger value="add" onClick={() => setSubtractMode(false)}>Add Item</TabsTrigger>
-          <TabsTrigger value="subtract" onClick={() => setSubtractMode(true)}>Subtract</TabsTrigger>
+          <TabsTrigger value="add" onClick={() => setSubtractMode(false)}>
+            Add Item
+          </TabsTrigger>
+          <TabsTrigger value="subtract" onClick={() => setSubtractMode(true)}>
+            Subtract
+          </TabsTrigger>
           <TabsTrigger value="changelog">Log</TabsTrigger>
           <TabsTrigger value="importexport">CSV</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
         </TabsList>
 
+        {/* Inventory ------------------------------------------------ */}
         <TabsContent value="inventory">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Current Inventory</CardTitle>
-              <Button variant="outline" size="sm" onClick={undoLastChange} disabled={previousStates.length === 0}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Undo
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!previousStates.length}
+                onClick={undoLastChange}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Undo
               </Button>
             </CardHeader>
             <CardContent>
@@ -442,10 +310,11 @@ export default function InventoryApp() {
           </Card>
         </TabsContent>
 
+        {/* Add / Subtract ------------------------------------------ */}
         <TabsContent value="add">
           <Card>
             <CardHeader>
-              <CardTitle>Add New Item</CardTitle>
+              <CardTitle>Add New Item</CardTitle>
             </CardHeader>
             <CardContent>
               <InventoryForm
@@ -458,26 +327,24 @@ export default function InventoryApp() {
           </Card>
         </TabsContent>
 
+        {/* Change log ---------------------------------------------- */}
         <TabsContent value="changelog">
           <Card>
             <CardHeader>
-              <CardTitle>Change Log</CardTitle>
+              <CardTitle>Change Log</CardTitle>
             </CardHeader>
             <CardContent>
               <ChangeLog changeLog={changeLog} />
-              <AlertDialog
-                open={isAlertDialogOpen}
-                onOpenChange={setIsAlertDialogOpen}
-              >
+              <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
                 <AlertDialogTrigger asChild>
                   <Button variant="ghost" className="text-red-500 mt-4">
-                    Clear log
+                    Clear log
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      Are you sure you want to clear the change log?
+                      Are you sure you want to clear the change log?
                     </AlertDialogTitle>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -498,6 +365,7 @@ export default function InventoryApp() {
           </Card>
         </TabsContent>
 
+        {/* CSV ------------------------------------------------------ */}
         <TabsContent value="importexport">
           <Card>
             <CardHeader>
@@ -506,7 +374,9 @@ export default function InventoryApp() {
             <CardContent>
               <CsvImportExport
                 inventory={inventory}
-                setInventory={setInventory}
+                addItem={addItem}
+                editItem={editItem}
+                deleteItem={deleteItem}
                 setChangeLog={setChangeLog}
                 setPreviousStates={setPreviousStates}
               />
@@ -514,10 +384,11 @@ export default function InventoryApp() {
           </Card>
         </TabsContent>
 
+        {/* Image ---------------------------------------------------- */}
         <TabsContent value="image">
           <Card>
             <CardHeader>
-              <CardTitle>Image ➜ Inventory</CardTitle>
+              <CardTitle>Image ➜ Inventory</CardTitle>
             </CardHeader>
             <CardContent>
               <ImageToInventory

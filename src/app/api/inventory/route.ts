@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/firebaseAdmin";
 import { Timestamp } from "firebase-admin/firestore";
 import type { InventoryItem, InventoryItemData } from "@/types/inventory";
+import { db, adminAuth } from "@/lib/firebaseAdmin";
+import { FieldValue } from "firebase-admin/firestore";
+import type { ChangeLogEntry } from "@/types/changeLog";
 
 /**
  * Payload that the client sends when creating an inventory item.
@@ -35,6 +37,8 @@ export async function POST(request: Request) {
     // Note: we accept an optional `id` because the front-end may generate one
     // for optimistic UI / offline scenarios.  Keeping that id avoids duplicates
     // when the page is reloaded before the server acknowledges the write.
+    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1] ?? "";
+    const { uid } = await adminAuth.verifySessionCookie(token, true);
     const data = (await request.json()) as CreateItemPayload;
 
     const { id, name, quantity, unit, category, subcategory } = data as CreateItemPayload;
@@ -61,19 +65,22 @@ export async function POST(request: Request) {
 
     await docRef.set(newItem);
 
-    // Log the creation event in Firestore (best-effort)
-    try {
-      const logEntry = {
-        action: "create",
-        collection: "inventory",
-        documentId: docRef.id,
-        data: newItem,
-        timestamp: Timestamp.now(),
-      };
-      await db.collection("logs").doc().set(logEntry);
-    } catch (err: any) {
-      console.error("Failed to log inventory creation:", err);
-    }
+    /* ---------- audit‑log (immutable) -------------------- */
+    const logRef = db.collection("changeLogs")
+                     .doc(uid)
+                     .collection("events")
+                     .doc();
+    const log: ChangeLogEntry = {
+      timestamp : FieldValue.serverTimestamp(),
+      userId    : uid,
+      action    : "CREATE",
+      name,
+      category,
+      subcategory,
+      quantity,
+      unit,
+    };
+    await logRef.set(log);
 
     return NextResponse.json(
       { id: docRef.id, ...newItem } as InventoryItem,
