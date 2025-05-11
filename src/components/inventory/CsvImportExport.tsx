@@ -1,136 +1,164 @@
 "use client";
 
 import { useState } from "react";
-import { parse, unparse } from "papaparse";
+import Papa from "papaparse"; // Import without type references
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import type { Dispatch, SetStateAction } from "react";
-import type { InventoryItem, SubCategory } from "@/types/inventory";
+import type {
+  InventoryItem,
+  SubCategory,
+  Unit,
+  Category,
+} from "@/types/inventory";
 import { getMainCategory } from "@/types/inventory";
-import { get } from "http";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
+/* ---------------------------------- CSV row --------------------------- */
+interface CsvRow {
+  name: string;
+  quantity: string; // se convierte a número
+  unit: string;
+  subcategory?: string;
+}
 
-
+/* ---------------------------------- props ----------------------------- */
 interface CsvImportExportProps {
   inventory: InventoryItem[];
-  setInventory: Dispatch<SetStateAction<InventoryItem[]>>;
+  addItem: (item: Omit<InventoryItem, "id">) => void;
+  editItem: (id: string, patch: Partial<InventoryItem>) => void;
+  deleteItem: (id: string) => void; // (reservado para futuro)
   setChangeLog: Dispatch<SetStateAction<string[]>>;
   setPreviousStates: Dispatch<SetStateAction<InventoryItem[][]>>;
 }
 
+/* ===================================================================== */
+/*                           Component                                   */
+/* ===================================================================== */
 export const CsvImportExport: React.FC<CsvImportExportProps> = ({
   inventory,
-  setInventory,
+  addItem,
+  editItem,
+  deleteItem, // eslint-disable-line @typescript-eslint/no-unused-vars
   setChangeLog,
   setPreviousStates,
 }) => {
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [parsedRows, setParsedRows] = useState<Omit<InventoryItem, "id">[]>([]);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setCsvFile(event.target.files[0]);
-    }
+  /* --------------------------- import helpers ------------------------ */
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) setCsvFile(e.target.files[0]);
   };
 
-  const handleImport = () => {
+  const parseCsv = () => {
     if (!csvFile) {
-      toast({
-        title: "No file selected.",
-        description: "Please select a CSV file to import.",
-      });
+      toast({ title: "No file selected", description: "Choose a CSV to import." });
       return;
     }
 
     const reader = new FileReader();
+    reader.onload = (ev) => {
+      const csvText = ev.target?.result as string;
 
-    reader.onload = (event) => {
-      const csvData = event.target?.result as string;
-
-      parse(csvData, {
+      Papa.parse<CsvRow>(csvText, {
         header: true,
-        complete: (results: Papa.ParseResult<any>) => {
-          try {
-            const importedData: InventoryItem[] = results.data
-              .filter((row: any) => row.name && row.quantity && row.unit)
-              .map((row: any) => ({
-                id: crypto.randomUUID(),
-                name: row.name,
-                quantity: parseFloat(row.quantity),
-                unit: row.unit,
-                subcategory: row.subcategory as SubCategory,
-                category: getMainCategory(row.subcategory),
-              }));
-
-            setPreviousStates((prev) => [...prev, inventory]);
-            setInventory(importedData);
-            setChangeLog((prev) => [
-              ...prev,
-              `${new Date().toLocaleString()} - Imported inventory from CSV`,
-            ]);
-            toast({
-              title: "Import Successful",
-              description: "Inventory has been updated from the CSV file.",
-            });
-          } catch (error) {
-            toast({
-              variant: "destructive",
-              title: "Parse error",
-              description: "Error parsing CSV",
-            });
-          }
+        skipEmptyLines: true,
+        complete: (result) => { 
+          // Process the parsed rows
+          const processedRows = result.data.map((row: CsvRow) => {
+            // Convert quantity to number
+            const quantity = parseFloat(row.quantity) || 0; 
+            // Determine category from subcategory
+            const subcategory = row.subcategory as SubCategory || "other";
+            const category = getMainCategory(subcategory);
+            
+            return {
+              name: row.name,
+              quantity,
+              unit: row.unit as Unit,
+              subcategory,
+              category,
+            };
+          });
+          
+          setParsedRows(processedRows);
+          setConfirmOpen(true);
         },
-        error: (error: Papa.ParseError) => {
-          toast({
-            title: "Parse error",
-            description: `CSV parsing error: ${error.message}.`,
-            variant: "destructive",
+        error: (error) => {
+          toast({ 
+            title: "Error parsing CSV", 
+            description: error.message || "Unknown error"
           });
         },
       });
     };
-
-    reader.onerror = () => {
-      toast({
-        variant: "destructive",
-        title: "Import failed.",
-        description: "Failed to read the CSV file.",
-      });
-    };
-
     reader.readAsText(csvFile);
   };
 
-  const handleExport = () => {
-    if (inventory.length === 0) {
-      toast({
-        title: "Nothing to export.",
-        description: "The inventory list is empty.",
-      });
-      return;
-    }
+  const doImport = () => {
+    setPreviousStates((prev) => [...prev, inventory]); // para Undo
 
-    const csvData = unparse(inventory, {
-      header: true,
+    parsedRows.forEach((row) => {
+      const existing = inventory.find(
+        (i) => i.name.toLowerCase() === row.name.toLowerCase(),
+      );
+      existing
+        ? editItem(existing.id, {
+            quantity: row.quantity,
+            unit: row.unit,
+            subcategory: row.subcategory,
+            category: row.category,
+          })
+        : addItem(row);
     });
 
-    const blob = new Blob([csvData], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", "inventory.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setChangeLog((log) => [
+      ...log,
+      `${new Date().toLocaleString()} – Imported ${parsedRows.length} rows from CSV`,
+    ]);
 
     toast({
-      title: "Export Successful",
-      description: "Inventory has been exported to CSV.",
+      title: "Import successful",
+      description: `${parsedRows.length} items processed.`,
     });
+    setConfirmOpen(false);
+    setCsvFile(null);
   };
 
+  /* --------------------------- export helper ------------------------ */
+  const handleExport = () => {
+    if (!inventory.length) {
+      toast({ title: "Nothing to export", description: "Inventory is empty." });
+      return;
+    }
+    const csv = Papa.unparse(inventory, { header: true });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "inventory.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({ title: "Export successful", description: "inventory.csv generated." });
+  };
+
+  /* ------------------------------ UI --------------------------------- */
   return (
     <div className="flex flex-col space-y-4">
+      {/* Import -------------------------------------------------------- */}
       <div>
         <input
           type="file"
@@ -141,16 +169,40 @@ export const CsvImportExport: React.FC<CsvImportExportProps> = ({
         />
         <label htmlFor="csv-upload">
           <Button asChild>
-            <span className="mr-2">Import CSV</span>
+            <span>Select CSV</span>
           </Button>
         </label>
-        <Button variant="outline" onClick={handleImport} className="ml-2">
-          Upload
+        <Button
+          variant="outline"
+          onClick={parseCsv}
+          className="ml-2"
+          disabled={!csvFile}
+        >
+          Preview & Import
         </Button>
       </div>
+
+      {/* Export -------------------------------------------------------- */}
       <Button variant="secondary" onClick={handleExport}>
         Export CSV
       </Button>
+
+      {/* Confirm dialog ----------------------------------------------- */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Import {parsedRows.length} items from CSV?
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={doImport}>
+              Yes, import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

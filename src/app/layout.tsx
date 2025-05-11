@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import { Providers } from '@/components/Providers'; 
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -14,20 +15,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Shawinv',
-  description: 'Smart Inventory is a smart inventory management system that helps you keep track of your inventory in real-time.',
+  title:       'Shawinv',
+  description: 'Smart Inventory – real‑time stock tracking',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        {/* Toast notifications */}
+        <Providers>{children}</Providers>                    {/* <- wrap */}
         <Toaster />
       </body>
     </html>
