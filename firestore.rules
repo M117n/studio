@@ -1,15 +1,56 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow read/write access to authenticated users for inventory and changelog
-    match /inventory/{itemId} {
-      allow read, write: if request.auth != null;
+
+    // Helper function to check for admin role
+    function isAdmin() {
+      return request.auth.token.role == 'admin';
     }
+
+    match /inventory/{itemId} {
+      allow read: if request.auth != null;
+      // Allow writes only by admins or specific server-side logic (not enforced here directly for transactions)
+      allow write: if isAdmin(); 
+    }
+
     match /changelog/{logId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null; // Or refine further if needed
+    }
+
+    // Assuming changeLogs is a top-level collection now based on previous rules snippet
+    // If it's nested under /changelog/{logId}/changeLogs, adjust path accordingly.
     match /changeLogs/{uid}/events/{id} {
       allow read, write: if request.auth.uid == uid;
-      }
+    }
+
+    match /removalRequests/{requestId} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'pending';
+      allow read: if request.auth != null && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin(); // Admins can update status, add notes etc.
+      // No delete for now, or restrict to admin / specific conditions
+    }
+
+    match /actionLogs/{logId} {
+      allow read, create: if isAdmin(); // Admins can read and create (though creation is transactional)
+      // No update or delete for general logs
+    }
+
+    match /notifications/{notificationId} {
+      // Users can list their own notifications based on their UID. 
+      // The client query MUST include a where('userId', '==', request.auth.uid) clause.
+      allow list: if request.auth != null;
+
+      // Users can read (get) a specific notification document if it's theirs
+      allow get: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      allow create: if isAdmin(); // Notifications created by admin actions
+      
+      // Users can update the isRead status of their own notifications
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid 
+                      && request.resource.data.keys().hasOnly(['isRead']) 
+                      && request.resource.data.isRead == true; // Can only set to true
+      // No delete for now, or restrict to admin / specific conditions
     }
   }
 }

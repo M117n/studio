@@ -1,41 +1,107 @@
 import type { Unit } from '@/types/inventory';
 
-// Conversion factors between units
+// Units that intentionally have no conversion factors
+export const NON_CONVERTIBLE_UNITS: readonly Unit[] = [
+  "case", "bag", "bottle", "can", "piece",
+] as const;
+
+// Conversion factors between units (US customary units only)
 export const factors: Partial<Record<Unit, Partial<Record<Unit, number>>>> = {
+  // Weight conversions
   kg: { g: 1000, lb: 2.20462, oz: 35.274 },
   g: { kg: 0.001, lb: 0.00220462, oz: 0.035274 },
   lb: { kg: 0.453592, g: 453.592, oz: 16 },
   oz: { kg: 0.0283495, g: 28.3495, lb: 0.0625 },
+  
+  // Volume conversions (US Customary)
   L: {
     mL: 1000,
-    'gallon (US)': 0.264172,
-    'quart (US)': 1.05669,
-    'pint (US)': 2.11338,
-    'fluid oz (US)': 33.814,
-    'gallon (UK)': 0.219969,
-    'quart (UK)': 0.879877,
-    'pint (UK)': 1.75975,
-    'fluid oz (UK)': 35.1951,
+    us_gallon: 0.264172,
+    us_quart: 1.05669,
+    us_pint: 2.11338,
+    us_fluid_oz: 33.814
   },
+  
   mL: {
     L: 0.001,
-    'gallon (US)': 0.000264172,
-    'quart (US)': 0.00105669,
-    'pint (US)': 0.00211338,
-    'fluid oz (US)': 0.033814,
-    'gallon (UK)': 0.000219969,
-    'quart (UK)': 0.000879877,
-    'pint (UK)': 0.00175975,
-    'fluid oz (UK)': 0.0351951,
+    us_gallon: 0.000264172,
+    us_quart: 0.00105669,
+    us_pint: 0.00211338,
+    us_fluid_oz: 0.033814
   },
-  'gallon (US)': { L: 3.78541, mL: 3785.41, 'quart (US)': 4, 'pint (US)': 8, 'fluid oz (US)': 128 },
-  'quart (US)': { L: 0.946353, mL: 946.353, 'gallon (US)': 0.25, 'pint (US)': 2, 'fluid oz (US)': 32 },
-  'pint (US)': { L: 0.473176, mL: 473.176, 'gallon (US)': 0.125, 'quart (US)': 0.5, 'fluid oz (US)': 16 },
-  'fluid oz (US)': { L: 0.0295735, mL: 29.5735, 'gallon (US)': 0.0078125, 'quart (US)': 0.03125, 'pint (US)': 0.0625 },
-  'gallon (UK)': { L: 4.54609, mL: 4546.09, 'quart (UK)': 4, 'pint (UK)': 8, 'fluid oz (UK)': 160 },
-  'quart (UK)': { L: 1.13652, mL: 1136.52, 'gallon (UK)': 0.25, 'pint (UK)': 2, 'fluid oz (UK)': 40 },
-  'pint (UK)': { L: 0.568261, mL: 568.261, 'gallon (UK)': 0.125, 'quart (UK)': 0.5, 'fluid oz (UK)': 20 },
-  'fluid oz (UK)': { L: 0.0284131, mL: 28.4131, 'gallon (UK)': 0.00625, 'quart (UK)': 0.025, 'pint (UK)': 0.05 },
+  
+  us_gallon: { 
+    L: 3.78541, 
+    mL: 3785.41, 
+    us_quart: 4, 
+    us_pint: 8, 
+    us_fluid_oz: 128 
+  },
+  
+  us_quart: { 
+    L: 0.946353, 
+    mL: 946.353, 
+    us_gallon: 0.25, 
+    us_pint: 2, 
+    us_fluid_oz: 32 
+  },
+  
+  us_pint: { 
+    L: 0.473176, 
+    mL: 473.176, 
+    us_gallon: 0.125, 
+    us_quart: 0.5, 
+    us_fluid_oz: 16 
+  },
+  
+  us_fluid_oz: { 
+    L: 0.0295735, 
+    mL: 29.5735, 
+    us_gallon: 0.0078125, 
+    us_quart: 0.03125, 
+    us_pint: 0.0625,
+    imp_fluid_oz: 1.04084
+  },
+
+  // Imperial volume units
+  imp_gallon: { 
+    L: 4.54609, 
+    mL: 4546.09, 
+    imp_quart: 4, 
+    imp_pint: 8, 
+    imp_fluid_oz: 160,
+    us_gallon: 1.20095,
+    us_quart: 4.8038,
+    us_pint: 9.6076,
+    us_fluid_oz: 153.722
+  },
+  imp_quart: { 
+    L: 1.13652, 
+    mL: 1136.52, 
+    imp_gallon: 0.25, 
+    imp_pint: 2, 
+    imp_fluid_oz: 40,
+    us_quart: 1.20095,
+    us_pint: 2.4019,
+    us_fluid_oz: 38.4304
+  },
+  imp_pint: { 
+    L: 0.568261, 
+    mL: 568.261, 
+    imp_gallon: 0.125, 
+    imp_quart: 0.5, 
+    imp_fluid_oz: 20,
+    us_pint: 1.20095,
+    us_fluid_oz: 19.2152
+  },
+  imp_fluid_oz: { 
+    L: 0.0284131, 
+    mL: 28.4131, 
+    imp_gallon: 0.00625, 
+    imp_quart: 0.025, 
+    imp_pint: 0.05,
+    us_fluid_oz: 0.96076
+  },
 };
 
 /**
@@ -44,6 +110,14 @@ export const factors: Partial<Record<Unit, Partial<Record<Unit, number>>>> = {
  */
 export function convertUnits(value: number, fromUnit: Unit, toUnit: Unit): number | null {
   if (fromUnit === toUnit) return value;
+  // Hard stop for the five non‑convertible units
+  if (
+    NON_CONVERTIBLE_UNITS.includes(fromUnit) ||
+    NON_CONVERTIBLE_UNITS.includes(toUnit)
+  ) {
+    return null;
+  }
+
   const factor = factors[fromUnit]?.[toUnit];
   return factor != null ? value * factor : null;
 }

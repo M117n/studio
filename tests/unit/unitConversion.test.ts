@@ -10,6 +10,13 @@ describe('convertUnits', () => {
   it('returns null when conversion is not available', () => {
     // No direct conversion defined between 'kg' and 'L'
     expect(convertUnits(1, 'kg', 'L')).toBeNull();
+    // Never‑convertible units
+    expect(convertUnits(1, "case", "kg")).toBeNull();
+    expect(convertUnits(1, "bag", "bottle")).toBeNull();
+  });
+
+  it("leaves value unchanged for identical never‑convertible units", () => {
+    expect(convertUnits(7, "case", "case")).toBe(7);
   });
 
   describe('conversion factors', () => {

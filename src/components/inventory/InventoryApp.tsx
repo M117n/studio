@@ -7,6 +7,7 @@ import { InventoryForm } from "@/components/inventory/InventoryForm";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
+import { SubtractItemsComponent } from "@/components/inventory/SubtractItemsComponent";
 import type { InventoryItem, Unit, SubCategory } from "@/types/inventory";
 import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS } from "@/types/inventory";
 import { convertUnits } from "@/lib/unitConversion";
@@ -58,6 +59,7 @@ import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
 import { useInventory } from "@/hooks/useInventory";
+import { useAuth } from "@/hooks/useAuth";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
@@ -79,6 +81,12 @@ export default function InventoryApp() {
     editItem:  editItemDb,
     deleteItem: deleteItemDb,
   } = useInventory();
+
+  /* --------------------------- auth user ------------------------ */
+  const currentUser = auth.currentUser;
+  const userId = currentUser?.uid;
+  const userName = currentUser?.displayName || currentUser?.email || undefined; // Ensure it's string or undefined
+  const { role } = useAuth(); // Get user role from useAuth hook
 
   /* ------------------------- local state ------------------------- */
   const [changeLog, setChangeLog] = useState<string[]>(() =>
@@ -216,11 +224,32 @@ export default function InventoryApp() {
         <h1 className="text-2xl font-bold mr-4">Shawinv</h1>
         <Input
           ref={searchInputRef}
-          placeholder="Search inventory…"
+          type="search"
+          placeholder="Search inventory..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="sm:max-w-sm"
+          className="w-64"
         />
+        
+        {/* Admin Role Indicator and Panel Button */}
+        {role === 'admin' ? (
+          <>
+            <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+              Admin Role: Active
+            </span>
+            <Button 
+              variant="outline"
+              className="ml-2 bg-violet-100 hover:bg-violet-200 text-violet-900 border-violet-300"
+              onClick={() => router.push('/admin/dashboard')}
+            >
+              Admin Panel
+            </Button>
+          </>
+        ) : (
+          <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
+            Regular User
+          </span>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -272,12 +301,10 @@ export default function InventoryApp() {
           <TabsTrigger value="add" onClick={() => setSubtractMode(false)}>
             Add Item
           </TabsTrigger>
-          <TabsTrigger value="subtract" onClick={() => setSubtractMode(true)}>
-            Subtract
-          </TabsTrigger>
           <TabsTrigger value="changelog">Log</TabsTrigger>
           <TabsTrigger value="importexport">CSV</TabsTrigger>
           <TabsTrigger value="image">Image</TabsTrigger>
+          <TabsTrigger value="subtractItems">Subtract Items</TabsTrigger>
         </TabsList>
 
         {/* Inventory ------------------------------------------------ */}
@@ -397,6 +424,15 @@ export default function InventoryApp() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Subtract Items Tab --------------------------------------- */}
+        <TabsContent value="subtractItems">
+          <SubtractItemsComponent 
+            inventory={inventory} 
+            userId={userId} // string | undefined
+            userName={userName} // string | undefined
+          />
         </TabsContent>
       </Tabs>
     </div>
