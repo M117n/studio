@@ -50,6 +50,12 @@ service cloud.firestore {
       allow update: if request.auth != null && resource.data.userId == request.auth.uid 
                       && request.resource.data.keys().hasOnly(['isRead']) 
                       && request.resource.data.isRead == true; // Can only set to true
+      
+      // This special rule is for batch updates to mark all as read
+      allow update: if request.auth != null 
+                      && resource.data.userId == request.auth.uid 
+                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']) 
+                      && request.resource.data.isRead == true;
       // No delete for now, or restrict to admin / specific conditions
     }
   }

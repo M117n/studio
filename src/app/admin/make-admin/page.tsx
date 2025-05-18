@@ -3,22 +3,31 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import AdminGuard from '@/components/AdminGuard';
 import { AdminNavbar } from '@/components/AdminNavbar';
 import { toast } from '@/hooks/use-toast';
 
 export default function MakeAdminPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [targetUid, setTargetUid] = useState('');
   const [result, setResult] = useState<{success?: boolean; message?: string; error?: string} | null>(null);
 
   const handleMakeAdmin = async () => {
+    if (!targetUid.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a user UID",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     setResult(null);
     
     try {
-      // Using the hardcoded UID as requested
-      const targetUid = '9CuI7xQ8FPOscSoArVX3aC3SPoZ2';
-      
       const response = await fetch('/api/admin/make-admin', {
         method: 'POST',
         headers: {
@@ -42,6 +51,9 @@ export default function MakeAdminPage() {
         title: "Success",
         description: `User with UID: ${targetUid} is now an admin`,
       });
+      
+      // Clear the input field after successful operation
+      setTargetUid('');
     } catch (error: any) {
       console.error('Error making user admin:', error);
       setResult({ 
@@ -69,8 +81,16 @@ export default function MakeAdminPage() {
               <CardTitle>Make User Admin</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="p-4 bg-slate-100 rounded-md">
-                <p className="font-mono text-sm break-all">User ID: 9CuI7xQ8FPOscSoArVX3aC3SPoZ2</p>
+              <div className="space-y-2">
+                <Label htmlFor="user-id">User ID</Label>
+                <Input
+                  id="user-id"
+                  value={targetUid}
+                  onChange={(e) => setTargetUid(e.target.value)}
+                  placeholder="Enter the user's UID"
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">Enter the Firebase UID of the user you want to make an admin</p>
               </div>
               
               <Button 
@@ -78,7 +98,7 @@ export default function MakeAdminPage() {
                 disabled={isLoading}
                 className="w-full"
               >
-                {isLoading ? 'Processing...' : 'Make This User Admin'}
+                {isLoading ? 'Processing...' : 'Make User Admin'}
               </Button>
               
               {result && (

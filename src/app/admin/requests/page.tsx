@@ -201,7 +201,7 @@ const AdminPanelPage = () => {
           requestId: request.id,
           timestamp: serverTimestamp(),
           isRead: false,
-          link: `/requests/${request.id}` // Updated link path to the requests page
+          link: `/notifications/${request.id}` // Correct path to the notifications detail page
         });
       });
 
@@ -260,7 +260,7 @@ const AdminPanelPage = () => {
         adminNotes: rejectionNotes || "No specific reason provided.",
         timestamp: serverTimestamp(),
         isRead: false,
-        link: `/requests/${request.id}` // Updated link path to the requests page
+        link: `/notifications/${request.id}` // Correct path to the notifications detail page
       });
 
       await batch.commit();

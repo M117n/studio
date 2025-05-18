@@ -3,11 +3,34 @@
 import { useEffect, useState } from 'react';
 import { getFirestore, collection, query, where, onSnapshot, Timestamp, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { auth } from '@/lib/firebaseClient'; 
-import { Bell, CheckCircle2 } from 'lucide-react';
+import { Bell, CheckCircle2, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
+import { Card, CardContent } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
+
+interface RequestedItemDetail {
+  itemId: string;
+  name: string;
+  quantityToRemove: number;
+  unit: string;
+  category?: string | null;
+  imageUrl?: string | null;
+}
+
+interface RemovalRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  requestedItems: RequestedItemDetail[];
+  requestTimestamp: Timestamp;
+  status: 'pending' | 'approved' | 'rejected';
+  adminId?: string;
+  adminName?: string;
+  processedTimestamp?: Timestamp;
+  adminNotes?: string;
+}
 
 interface Notification {
   id: string;
@@ -17,7 +40,6 @@ interface Notification {
   requestId: string;
   timestamp: Timestamp;
   isRead: boolean;
-  link?: string;
   adminNotes?: string; 
 }
 
@@ -26,6 +48,9 @@ const UserNotificationsBell = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [currentUser, setCurrentUser] = useState(auth.currentUser);
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedNotification, setExpandedNotification] = useState<string | null>(null);
+  const [requestDetails, setRequestDetails] = useState<RemovalRequest | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged(user => {
@@ -123,6 +148,51 @@ const UserNotificationsBell = () => {
     }
   };
 
+  const fetchRequestDetails = async (notificationId: string, requestId: string) => {
+    if (expandedNotification === notificationId) {
+      // If already expanded, collapse it
+      setExpandedNotification(null);
+      setRequestDetails(null);
+      return;
+    }
+
+    setIsLoadingDetails(true);
+    setExpandedNotification(notificationId);
+
+    try {
+      const db = getFirestore(auth.app);
+      const requestRef = doc(db, 'removalRequests', requestId);
+      const requestSnap = await getDoc(requestRef);
+
+      if (!requestSnap.exists()) {
+        toast({ 
+          title: "Error", 
+          description: "Request details not found.", 
+          variant: "destructive" 
+        });
+        setIsLoadingDetails(false);
+        return;
+      }
+
+      const requestData = requestSnap.data() as Omit<RemovalRequest, 'id'>;
+      setRequestDetails({ id: requestSnap.id, ...requestData } as RemovalRequest);
+    } catch (error) {
+      console.error("Error fetching request details: ", error);
+      toast({ 
+        title: "Error", 
+        description: "Could not load request details.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsLoadingDetails(false);
+    }
+
+    // Mark notification as read when expanding
+    if (!notifications.find(n => n.id === notificationId)?.isRead) {
+      handleMarkAsRead(notificationId);
+    }
+  };
+
   if (!currentUser) {
     return null; 
   }
@@ -155,35 +225,86 @@ const UserNotificationsBell = () => {
         ) : (
           <ul className="divide-y">
             {notifications.map(notif => (
-              <li key={notif.id} className={`p-3 hover:bg-accent ${!notif.isRead ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
-                <div className="flex items-start space-x-3">
-                  {!notif.isRead && (
-                     <span className="flex-shrink-0 h-2 w-2 mt-1.5 bg-blue-500 rounded-full" aria-hidden="true"></span>
-                  )}
-                  <div className="flex-1">
-                    <p className={`text-sm ${!notif.isRead ? 'font-semibold' : 'text-muted-foreground'}`}>{notif.message}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(notif.timestamp.toDate()).toLocaleDateString()} {new Date(notif.timestamp.toDate()).toLocaleTimeString()}
-                    </p>
-                    {notif.link && (
-                      <Link href={notif.link} passHref>
-                        <Button 
-                          variant="link" 
-                          size="sm" 
-                          className="p-0 h-auto text-xs mt-1"
-                          onClick={() => !notif.isRead && handleMarkAsRead(notif.id)}
-                        >
-                          View Details
-                        </Button>
-                      </Link>
+              <li key={notif.id}>
+                <div className={`p-3 hover:bg-accent ${!notif.isRead ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}>
+                  <div className="flex items-start space-x-3">
+                    {!notif.isRead && (
+                      <span className="flex-shrink-0 h-2 w-2 mt-1.5 bg-blue-500 rounded-full" aria-hidden="true"></span>
+                    )}
+                    <div className="flex-1">
+                      <p className={`text-sm ${!notif.isRead ? 'font-semibold' : 'text-muted-foreground'}`}>{notif.message}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(notif.timestamp.toDate()).toLocaleDateString()} {new Date(notif.timestamp.toDate()).toLocaleTimeString()}
+                      </p>
+                      <Button 
+                        variant="link" 
+                        size="sm" 
+                        className="p-0 h-auto text-xs mt-1 flex items-center"
+                        onClick={() => fetchRequestDetails(notif.id, notif.requestId)}
+                      >
+                        {expandedNotification === notif.id ? (
+                          <>
+                            Hide Details
+                            <ChevronUp className="ml-1 h-3 w-3" />
+                          </>
+                        ) : (
+                          <>
+                            View Details
+                            <ChevronDown className="ml-1 h-3 w-3" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {!notif.isRead && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(notif.id)} title="Mark as read">
+                        <CheckCircle2 className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                      </Button>
                     )}
                   </div>
-                  {!notif.isRead && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(notif.id)} title="Mark as read">
-                      <CheckCircle2 className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-                    </Button>
-                  )}
                 </div>
+                
+                {expandedNotification === notif.id && (
+                  <div className="px-3 pb-3 pt-0">
+                    <Separator className="my-2" />
+                    {isLoadingDetails ? (
+                      <div className="py-2 text-center">
+                        <p className="text-xs text-muted-foreground">Loading details...</p>
+                      </div>
+                    ) : requestDetails ? (
+                      <Card className="bg-slate-50 dark:bg-slate-900 border-none shadow-none">
+                        <CardContent className="p-3">
+                          <div className="space-y-3">
+                            <div>
+                              <h5 className="text-xs font-semibold mb-1">Request Details</h5>
+                              <p className="text-xs text-muted-foreground">
+                                Status: <span className="font-medium capitalize">{requestDetails.status}</span>
+                              </p>
+                              {notif.adminNotes && (
+                                <div className="mt-2">
+                                  <p className="text-xs font-semibold">Admin Notes:</p>
+                                  <p className="text-xs text-muted-foreground">{notif.adminNotes}</p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <h5 className="text-xs font-semibold mb-1">Items {notif.type === 'request_approved' ? 'Removed' : 'Requested'}:</h5>
+                              <ul className="space-y-1">
+                                {requestDetails.requestedItems.map((item, index) => (
+                                  <li key={index} className="text-xs">
+                                    <span className="font-medium">{item.name}</span>: {item.quantityToRemove} {item.unit}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <p className="text-xs text-destructive py-2">Could not load request details.</p>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
