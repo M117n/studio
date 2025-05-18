@@ -1,4 +1,3 @@
-
 // ---------------------------------------------------------------------------
 // Centralised domain constants
 // ---------------------------------------------------------------------------
@@ -29,15 +28,17 @@ export const SUBCATEGORY_OPTIONS: readonly SubCategory[] = [
 export type Unit =
   | "kg" | "g" | "lb" | "oz"
   | "L" | "mL"
-  | "gallon (US)" | "quart (US)" | "pint (US)" | "fluid oz (US)"
-  | "gallon (UK)" | "quart (UK)" | "pint (UK)" | "fluid oz (UK)";
+  | "us_gallon" | "us_quart" | "us_pint" | "us_fluid_oz"
+  | "imp_gallon" | "imp_quart" | "imp_pint" | "imp_fluid_oz"
+  | "case" | "bag" | "bottle" | "can" | "piece";
 
-  export const UNIT_OPTIONS: readonly Unit[] = [
-    "kg","g","lb","oz",
-    "L","mL",
-    "gallon (US)","quart (US)","pint (US)","fluid oz (US)",
-    "gallon (UK)","quart (UK)","pint (UK)","fluid oz (UK)",
-  ] as const;
+export const UNIT_OPTIONS: readonly Unit[] = [
+  "kg","g","lb","oz",
+  "L","mL",
+  "us_gallon","us_quart","us_pint","us_fluid_oz",
+  "imp_gallon","imp_quart","imp_pint","imp_fluid_oz",
+  "case","bag","bottle","can","piece",
+] as const;
 
 /* helper – import everywhere instead of re‑declaring */
 export const getMainCategory = (sub: SubCategory): Category => {
@@ -53,8 +54,12 @@ export interface InventoryItem {
   name: string;
   quantity: number;
   unit: Unit;
-  category: Category;
-  subcategory: SubCategory; 
+  category?: Category; 
+  subcategory?: SubCategory; 
+
+  // Adding fields from MEM-77849468
+  imageUrl?: string;
+  description?: string;
 }
 
 export type InventoryItemData = Omit<InventoryItem, "id">;

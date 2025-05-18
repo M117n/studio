@@ -1,13 +1,13 @@
-[debug] [2025-05-10T20:50:21.100Z] ----------------------------------------------------------------------
-[debug] [2025-05-10T20:50:21.101Z] Command:       /home/martin/.nvm/versions/node/v22.15.0/bin/node /home/martin/.nvm/versions/node/v22.15.0/bin/firebase init
-[debug] [2025-05-10T20:50:21.101Z] CLI Version:   14.3.1
-[debug] [2025-05-10T20:50:21.101Z] Platform:      linux
-[debug] [2025-05-10T20:50:21.101Z] Node Version:  v22.15.0
-[debug] [2025-05-10T20:50:21.101Z] Time:          Sat May 10 2025 14:50:21 GMT-0600 (Mountain Daylight Time)
-[debug] [2025-05-10T20:50:21.101Z] ----------------------------------------------------------------------
+[debug] [2025-05-17T20:23:02.099Z] ----------------------------------------------------------------------
+[debug] [2025-05-17T20:23:02.100Z] Command:       /home/martin/.nvm/versions/node/v22.15.0/bin/node /home/martin/.nvm/versions/node/v22.15.0/bin/firebase init
+[debug] [2025-05-17T20:23:02.104Z] CLI Version:   14.4.0
+[debug] [2025-05-17T20:23:02.104Z] Platform:      linux
+[debug] [2025-05-17T20:23:02.104Z] Node Version:  v22.15.0
+[debug] [2025-05-17T20:23:02.104Z] Time:          Sat May 17 2025 14:23:02 GMT-0600 (Mountain Daylight Time)
+[debug] [2025-05-17T20:23:02.104Z] ----------------------------------------------------------------------
 [debug] 
-[debug] [2025-05-10T20:50:21.105Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2025-05-10T20:50:21.105Z] > authorizing via signed-in user (maartin.arriola117@gmail.com)
+[debug] [2025-05-17T20:23:02.246Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-05-17T20:23:02.247Z] > authorizing via signed-in user (maartin.arriola117@gmail.com)
 [info] 
      ######## #### ########  ######## ########     ###     ######  ########
      ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
@@ -22,8 +22,9 @@ You're about to initialize a Firebase project in this directory:
 Before we get started, keep in mind:
 
   * You are currently outside your home directory
+  * You are initializing within an existing Firebase project directory
 
-[debug] [2025-05-10T20:52:12.316Z] ExitPromptError: User force closed the prompt with SIGINT
+[debug] [2025-05-17T20:23:35.215Z] ExitPromptError: User force closed the prompt with SIGINT
     at Interface.sigint (/home/martin/.nvm/versions/node/v22.15.0/lib/node_modules/firebase-tools/node_modules/@inquirer/core/dist/commonjs/lib/create-prompt.js:100:37)
     at Interface.emit (node:events:518:28)
     at Interface.emit (node:domain:489:12)
