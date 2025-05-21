@@ -26,7 +26,14 @@ service cloud.firestore {
 
     match /removalRequests/{requestId} {
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'pending';
-      allow read: if request.auth != null && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin(); // Admins can update status, add notes etc.
+      // No delete for now, or restrict to admin / specific conditions
+    }
+    
+    match /additionRequests/{requestId} {
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid && request.resource.data.status == 'pending';
+      allow read: if request.auth != null && (resource.data.userId == request.auth.uid || isAdmin());
       allow update: if isAdmin(); // Admins can update status, add notes etc.
       // No delete for now, or restrict to admin / specific conditions
     }

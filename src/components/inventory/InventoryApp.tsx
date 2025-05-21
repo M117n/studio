@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { InventoryList } from "@/components/inventory/InventoryList";
 import { InventoryForm } from "@/components/inventory/InventoryForm";
+import { AddItemRequestComponent } from "@/components/inventory/AddItemRequestComponent";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
@@ -60,6 +61,7 @@ import { useRouter } from "next/navigation";
 
 import { useInventory } from "@/hooks/useInventory";
 import { useAuth } from "@/hooks/useAuth";
+import { AdminPanelModal } from "@/components/admin/AdminPanelModal";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
@@ -231,19 +233,13 @@ export default function InventoryApp() {
           className="w-64"
         />
         
-        {/* Admin Role Indicator and Panel Button */}
+        {/* Admin Role Indicator and Panel */}
         {role === 'admin' ? (
           <>
             <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
               Admin Role: Active
             </span>
-            <Button 
-              variant="outline"
-              className="ml-2 bg-violet-100 hover:bg-violet-200 text-violet-900 border-violet-300"
-              onClick={() => router.push('/admin/dashboard')}
-            >
-              Admin Panel
-            </Button>
+            <AdminPanelModal />
           </>
         ) : (
           <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
@@ -339,19 +335,13 @@ export default function InventoryApp() {
 
         {/* Add / Subtract ------------------------------------------ */}
         <TabsContent value="add">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add New Item</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <InventoryForm
-                onAddItem={addItem}
-                unitOptions={UNIT_OPTIONS}
-                subcategoryOptions={SUBCATEGORY_OPTIONS}
-                defaultSubcategory={defaultSubcategory}
-              />
-            </CardContent>
-          </Card>
+          <AddItemRequestComponent
+            unitOptions={UNIT_OPTIONS}
+            subcategoryOptions={SUBCATEGORY_OPTIONS}
+            defaultSubcategory={defaultSubcategory}
+            userId={userId}
+            userName={userName}
+          />
         </TabsContent>
 
         {/* Change log ---------------------------------------------- */}
