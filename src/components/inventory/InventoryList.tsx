@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS, getMainCategory } from "@/types/inventory";
+import { getMainCategory } from "@/types/inventory";
 import type { InventoryItem, Category, Unit, SubCategory } from "@/types/inventory";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Edit, Trash2 } from "lucide-react";
@@ -23,11 +23,7 @@ interface InventoryListProps {
     unitOptions: readonly Unit[];
 }
 
-const unitOptions = UNIT_OPTIONS;
-
-// Local alias to keep the original variable name used throughout the
-// component without touching the JSX further below.
-const subcategoryOptions = SUBCATEGORY_OPTIONS;
+// We don't need to redefine these as they're passed as props
 
 export const InventoryList: React.FC<InventoryListProps> = ({
     inventory,
@@ -42,7 +38,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editedName, setEditedName] = useState("");
     const [editedQuantity, setEditedQuantity] = useState<number | "">("");
-    const [editedUnit, setEditedUnit] = useState<Unit>(UNIT_OPTIONS[0]);
+    const [editedUnit, setEditedUnit] = useState<Unit>(unitOptions[0]);
     const [editedSubcategory, setEditedSubcategory] = useState<SubCategory>(subcategoryOptions[0]); // Default category
 
     const filteredInventory = inventory.filter(item =>
@@ -54,7 +50,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         setEditedName(item.name);
         setEditedQuantity(item.quantity);
         setEditedUnit(item.unit);
-        setEditedSubcategory(item.subcategory);
+        setEditedSubcategory(item.subcategory || subcategoryOptions[0]);
     };
 
     const cancelEditing = () => {
@@ -98,7 +94,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     // Group inventory items by their stored main category
     const groupedInventory = inventory.reduce(
         (acc: Record<Category, InventoryItem[]>, item) => {
-            const mainCategory = item.category;
+            // Default to 'other' if category is undefined
+            const mainCategory = item.category || 'other' as Category;
+            // The check below is no longer strictly necessary since we're ensuring mainCategory exists,
+            // but TypeScript will be happier with it
             if (!acc[mainCategory]) {
                 acc[mainCategory] = [];
             }
@@ -114,13 +113,18 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         } as Record<Category, InventoryItem[]>
     );
 
-    const subcategories: { [key: string]: SubCategory[] } = {
-        cooler: ["fruit", "vegetables", "juices", "dairy"],
-        freezer: ["meats", "cooked meats", "frozen vegetables", "bread", "desserts", "soups", "dressings"],
-        dry: [],
-        canned: [],
-        other: [],
-    };
+    // Get subcategories by category from the subcategoryOptions prop
+    const subcategories = subcategoryOptions.reduce<{ [key in Category]: SubCategory[] }>(
+        (acc, subcategory) => {
+            const category = getMainCategory(subcategory);
+            if (!acc[category]) {
+                acc[category] = [];
+            }
+            acc[category].push(subcategory);
+            return acc;
+        },
+        { cooler: [], freezer: [], dry: [], canned: [], other: [] }
+    );
 
     const categoryDisplayNames: Record<Category | SubCategory, string> = {
         cooler: "Cooler",
@@ -186,7 +190,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                             />
                                         ) : (
                                             <>
-                                                {convertedQuantity !== null ? (
+                                                {convertedQuantity !== null && typeof convertedQuantity === 'number' ? (
                                                     `${convertedQuantity.toFixed(2)}`
                                                 ) : (
                                                     `${item.quantity}`
@@ -483,7 +487,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                                     />
                                                                 ) : (
                                                                     <>
-                                                                        {convertedQuantity !== null ? (
+                                                                        {convertedQuantity !== null && typeof convertedQuantity === 'number' ? (
                                                                             `${convertedQuantity.toFixed(2)}`
                                                                         ) : (
                                                                             `${item.quantity}`

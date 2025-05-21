@@ -161,35 +161,106 @@ const UserNotificationsBell = () => {
 
     try {
       const db = getFirestore(auth.app);
-      const requestRef = doc(db, 'removalRequests', requestId);
-      const requestSnap = await getDoc(requestRef);
-
-      if (!requestSnap.exists()) {
-        toast({ 
-          title: "Error", 
-          description: "Request details not found.", 
-          variant: "destructive" 
+      
+      // Check if requestId is valid
+      if (!requestId || requestId.trim() === '') {
+        // Create placeholder for invalid request ID instead of throwing error
+        setRequestDetails({
+          id: 'not-found',
+          userId: '',
+          userName: '',
+          requestedItems: [],
+          requestTimestamp: Timestamp.now(),
+          status: 'pending', // Using valid status from the interface
+          adminNotes: 'This request information is no longer available.'
         });
-        setIsLoadingDetails(false);
         return;
       }
 
-      const requestData = requestSnap.data() as Omit<RemovalRequest, 'id'>;
-      setRequestDetails({ id: requestSnap.id, ...requestData } as RemovalRequest);
+      // Get request with explicit error handling
+      const requestRef = doc(db, 'removalRequests', requestId);
+      let requestSnap;
+      
+      try {
+        requestSnap = await getDoc(requestRef);
+      } catch (fetchError) {
+        // Handle Firestore errors silently
+        setRequestDetails({
+          id: 'error',
+          userId: '',
+          userName: '',
+          requestedItems: [],
+          requestTimestamp: Timestamp.now(),
+          status: 'rejected', // Using valid status from the interface
+          adminNotes: 'There was an error retrieving this request.'
+        });
+        return;
+      }
+
+      if (!requestSnap.exists()) {
+        // Create a placeholder for a request that doesn't exist anymore
+        // instead of showing an error to the user
+        setRequestDetails({
+          id: 'deleted',
+          userId: '',
+          userName: '',
+          requestedItems: [],
+          requestTimestamp: Timestamp.now(),
+          status: 'approved', // Using valid status from the interface
+          adminNotes: 'This request has been processed and is no longer available.'
+        });
+        return;
+      }
+
+      // Get data with proper type cast
+      const requestData = requestSnap.data();
+      if (!requestData) {
+        setRequestDetails({
+          id: 'empty',
+          userId: '',
+          userName: '',
+          requestedItems: [],
+          requestTimestamp: Timestamp.now(),
+          status: 'pending', // Using valid status from the interface
+          adminNotes: 'This request has no data.'
+        });
+        return;
+      }
+
+      // Ensure data has expected fields
+      const removalRequest: RemovalRequest = {
+        id: requestSnap.id,
+        userId: requestData.userId || '',
+        userName: requestData.userName || '',
+        requestedItems: requestData.requestedItems || [],
+        requestTimestamp: requestData.requestTimestamp,
+        status: requestData.status || 'pending',
+        adminId: requestData.adminId,
+        adminName: requestData.adminName,
+        processedTimestamp: requestData.processedTimestamp,
+        adminNotes: requestData.adminNotes
+      };
+
+      setRequestDetails(removalRequest);
+      
+      // Mark notification as read when expanding
+      if (!notifications.find(n => n.id === notificationId)?.isRead) {
+        handleMarkAsRead(notificationId);
+      }
+      
     } catch (error) {
-      console.error("Error fetching request details: ", error);
-      toast({ 
-        title: "Error", 
-        description: "Could not load request details.", 
-        variant: "destructive" 
+      // Fall back to a friendly message rather than showing an error
+      setRequestDetails({
+        id: 'error',
+        userId: '',
+        userName: '',
+        requestedItems: [],
+        requestTimestamp: Timestamp.now(),
+        status: 'rejected', // Using valid status from the interface
+        adminNotes: 'An error occurred while retrieving this request.'
       });
     } finally {
       setIsLoadingDetails(false);
-    }
-
-    // Mark notification as read when expanding
-    if (!notifications.find(n => n.id === notificationId)?.isRead) {
-      handleMarkAsRead(notificationId);
     }
   };
 

@@ -17,7 +17,10 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const snap = await itemRef(params.id).get();
+  // Extract the ID parameter to avoid using params.id directly
+  const itemId = params.id;
+  
+  const snap = await itemRef(itemId).get();
   if (!snap.exists) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
@@ -32,18 +35,21 @@ export async function PATCH(
   const token = req.headers.get('cookie')?.match(/session=([^;]+)/)?.[1] ?? '';
   const { uid } = await adminAuth.verifySessionCookie(token, true);
 
+  // Extract the ID parameter to avoid using params.id directly
+  const itemId = params.id;
+
   const patch = await req.json();                // validate in real life
   const batch = db.batch();
 
-  batch.update(itemRef(params.id), patch);
+  batch.update(itemRef(itemId), patch);
 
   const log: ChangeLogEntry = {
     timestamp : FieldValue.serverTimestamp(),
     userId    : uid,
     action    : 'UPDATE',
     name      : patch.name,
-    category  : patch.category,
-    subcategory: patch.subcategory,
+    category  : patch.category || 'other',
+    subcategory: patch.subcategory || 'other',
     quantity  : patch.quantity,
     unit      : patch.unit,
   };
@@ -60,23 +66,26 @@ export async function DELETE(
 ) {
   const token = req.headers.get('cookie')?.match(/session=([^;]+)/)?.[1] ?? '';
   const { uid } = await adminAuth.verifySessionCookie(token, true);
+  
+  // Extract the ID parameter to avoid using params.id directly
+  const itemId = params.id;
 
-  const snap = await itemRef(params.id).get();
+  const snap = await itemRef(itemId).get();
   if (!snap.exists) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   const data = snap.data() as InventoryItemData;
 
   const batch = db.batch();
-  batch.delete(itemRef(params.id));
+  batch.delete(itemRef(itemId));
 
   const log: ChangeLogEntry = {
     timestamp : FieldValue.serverTimestamp(),
     userId    : uid,
     action    : 'DELETE',
     name      : data.name,
-    category  : data.category,
-    subcategory: data.subcategory,
+    category  : data.category || 'other', // Provide default if undefined
+    subcategory: data.subcategory || 'other', // Provide default if undefined
     quantity  : data.quantity,
     unit      : data.unit,
   };

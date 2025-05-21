@@ -9,8 +9,8 @@ import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
 import { SubtractItemsComponent } from "@/components/inventory/SubtractItemsComponent";
-import type { InventoryItem, Unit, SubCategory } from "@/types/inventory";
-import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS } from "@/types/inventory";
+import type { InventoryItem, Unit, SubCategory, Category } from "@/types/inventory";
+import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS, getMainCategory } from "@/types/inventory";
 import { convertUnits } from "@/lib/unitConversion";
 
 import {
@@ -152,7 +152,16 @@ export default function InventoryApp() {
         } ${existing.name}.`,
       ]);
     } else {
-      addItemDb({ ...item, quantity: delta });
+      // Ensure category is correctly set based on subcategory
+      const ensuredCategory = item.subcategory ? getMainCategory(item.subcategory) : (item.category || 'other');
+      
+      // Add the item with the guaranteed category and quantity
+      addItemDb({ 
+        ...item, 
+        quantity: delta,
+        category: ensuredCategory 
+      });
+      
       setChangeLog((cl) => [
         ...cl,
         `${new Date().toLocaleString()} - Added ${item.quantity} ${item.unit} of ${item.name}.`,
@@ -165,19 +174,34 @@ export default function InventoryApp() {
     const original = inventory.find((i) => i.id === id);
     if (!original) return;
 
-    const conv = patch.quantity
-      ? convertUnits(patch.quantity, patch.unit ?? original.unit, original.unit)
-      : undefined;
-    if (patch.quantity && conv === null) {
-      toast({
-        variant: "destructive",
-        title: "Conversion not possible",
-      });
-      return;
+    // Handle unit conversion
+    let newQuantity = original.quantity; // Default to original quantity
+    
+    if (patch.quantity !== undefined) {
+      // If unit is changing or quantity is changing
+      if (patch.unit && patch.unit !== original.unit) {
+        // When units are different, we need conversion
+        const conv = convertUnits(patch.quantity, patch.unit, original.unit);
+        
+        if (conv === null) {
+          // Invalid conversion between incompatible units
+          toast({
+            variant: "destructive",
+            title: "Conversion not possible",
+            description: "Cannot convert between these units."
+          });
+          return;
+        }
+        
+        newQuantity = conv;
+      } else {
+        // Same unit or no unit change, just use the new quantity directly
+        newQuantity = patch.quantity;
+      }
     }
 
     setPreviousStates((ps) => [...ps, inventory]);
-    editItemDb({ id, ...patch, quantity: conv ?? original.quantity });
+    editItemDb({ id, ...patch, quantity: newQuantity });
     setChangeLog((cl) => [
       ...cl,
       `${new Date().toLocaleString()} - Edited ${original.name}.`,
