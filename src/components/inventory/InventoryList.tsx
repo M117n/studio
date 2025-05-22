@@ -280,9 +280,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                 <AccordionTrigger>{categoryDisplayNames[mainCategory as SubCategory]}</AccordionTrigger>
                                 <AccordionContent>
                                     {hasSubcategories ? (
-                                        <Accordion type="multiple">
-                                            {subcategories[mainCategory as keyof typeof subcategories].map(subcategory => {
-                                                const subcategoryItems = items.filter(item => item.subcategory === subcategory);
+                                        <>
+                                            <Accordion type="multiple">
+                                                {subcategories[mainCategory as keyof typeof subcategories].map(subcategory => {
+                                                    const subcategoryItems = items.filter(item => item.subcategory === subcategory);
                                                 if (subcategoryItems.length === 0) {
                                                     return null;
                                                 }
@@ -587,9 +588,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                             return null;
                                         })()}
                                         {/* END: Add table for leftover items */}
+                                        </>
                                     ) : (
-                                        // This is the case where hasSubcategories is false
-                                        // Items are displayed directly in a single table
+                                        {/* This is the case where hasSubcategories is false */}
+                                        {/* Items are displayed directly in a single table */}
                                         <Table>
                                             <TableCaption>A list of your {categoryDisplayNames[mainCategory as SubCategory]} inventory items.</TableCaption>
                                             <TableHeader>
