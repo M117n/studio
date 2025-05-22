@@ -280,9 +280,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                 <AccordionTrigger>{categoryDisplayNames[mainCategory as SubCategory]}</AccordionTrigger>
                                 <AccordionContent>
                                     {hasSubcategories ? (
-                                        <Accordion type="multiple">
-                                            {subcategories[mainCategory as keyof typeof subcategories].map(subcategory => {
-                                                const subcategoryItems = items.filter(item => item.subcategory === subcategory);
+                                        <>
+                                            <Accordion type="multiple">
+                                                {subcategories[mainCategory as keyof typeof subcategories].map(subcategory => {
+                                                    const subcategoryItems = items.filter(item => item.subcategory === subcategory);
                                                 if (subcategoryItems.length === 0) {
                                                     return null;
                                                 }
@@ -431,7 +432,166 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                                                 );
                                             })}
                                         </Accordion>
+                                        {/* START: Add table for leftover items (Moved here) */}
+                                        {(() => {
+                                            const mainCategorySubcategories = subcategories[mainCategory as keyof typeof subcategories] || [];
+                                            // Filter for items that are in the current mainCategory but not in any of its defined subcategories
+                                            const leftoverItems = items.filter(item => {
+                                                // Check if the item's subcategory is null/undefined OR not in the list of mainCategorySubcategories
+                                                return !item.subcategory || !mainCategorySubcategories.includes(item.subcategory);
+                                            });
+
+                                            if (leftoverItems.length > 0) {
+                                                return (
+                                                    <>
+                                                        <h4 className="text-lg font-semibold mt-4 mb-2">
+                                                            Other items in {categoryDisplayNames[mainCategory as SubCategory] || mainCategory}
+                                                        </h4>
+                                                        <Table>
+                                                            <TableCaption>A list of other {categoryDisplayNames[mainCategory as SubCategory] || mainCategory} inventory items.</TableCaption>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead className="w-[100px]">Name</TableHead>
+                                                                    <TableHead>Quantity</TableHead>
+                                                                    <TableHead>Unit</TableHead>
+                                                                    {editingId === null ? null : (
+                                                                        <TableHead>Category</TableHead>
+                                                                    )}
+                                                                    <TableHead className="text-right">Actions</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {leftoverItems.map(item => {
+                                                                    const convertedQuantity = convertUnits(item.quantity, item.unit, defaultUnit);
+                                                                    return (
+                                                                        <TableRow key={item.id}>
+                                                                            <TableCell>
+                                                                                {editingId === item.id ? (
+                                                                                    <Input
+                                                                                        type="text"
+                                                                                        value={editedName}
+                                                                                        onChange={(e) => setEditedName(e.target.value)}
+                                                                                    />
+                                                                                ) : (
+                                                                                    item.name
+                                                                                )}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {editingId === item.id ? (
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        value={editedQuantity}
+                                                                                        onChange={(e) =>
+                                                                                            setEditedQuantity(
+                                                                                                e.target.value === "" ? "" : parseFloat(e.target.value)
+                                                                                            )
+                                                                                        }
+                                                                                    />
+                                                                                ) : (
+                                                                                    <>
+                                                                                        {convertedQuantity !== null && typeof convertedQuantity === 'number' ? (
+                                                                                            `${convertedQuantity.toFixed(2)}`
+                                                                                        ) : (
+                                                                                            `${item.quantity}`
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                {editingId === item.id ? (
+                                                                                    <Select onValueChange={(v) => setEditedUnit(v as Unit)} defaultValue={editedUnit}>
+                                                                                        <SelectTrigger className="w-[180px]">
+                                                                                            <SelectValue placeholder="Select a unit" />
+                                                                                        </SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            {unitOptions.map((option: string) => (
+                                                                                                <SelectItem key={option} value={option}>
+                                                                                                    {option}
+                                                                                                </SelectItem>
+                                                                                            ))}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                ) : (
+                                                                                    <>
+                                                                                        {convertedQuantity !== null ? (
+                                                                                            `${defaultUnit}`
+                                                                                        ) : (
+                                                                                            <>
+                                                                                                {item.unit}
+                                                                                                <span className="ml-1 text-xs text-muted-foreground">
+                                                                                                    (Could not convert to {defaultUnit})
+                                                                                                </span>
+                                                                                            </>
+                                                                                        )}
+                                                                                    </>
+                                                                                )}
+                                                                            </TableCell>
+                                                                            {editingId === item.id ? (
+                                                                                <TableCell>
+                                                                                    <Select onValueChange={(v) => setEditedSubcategory(v as SubCategory)} defaultValue={editedSubcategory}>
+                                                                                        <SelectTrigger className="w-[180px]">
+                                                                                            <SelectValue placeholder="Select a category" />
+                                                                                        </SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            {subcategoryOptions.map((option: SubCategory) => (
+                                                                                                <SelectItem key={option} value={option}>
+                                                                                                    {option}
+                                                                                                </SelectItem>
+                                                                                            ))}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                </TableCell>
+                                                                            ) : null}
+                                                                            <TableCell className="text-right">
+                                                                                {editingId === item.id ? (
+                                                                                    <div className="flex justify-end gap-2">
+                                                                                        <Button size="sm" variant="secondary" onClick={saveChanges}>
+                                                                                            Save
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="ghost"
+                                                                                            onClick={cancelEditing}
+                                                                                        >
+                                                                                            Cancel
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="flex justify-end gap-2">
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            onClick={() => startEditing(item)}
+                                                                                        >
+                                                                                            <Edit className="h-4 w-4 mr-2" />
+                                                                                            Edit
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="destructive"
+                                                                                            onClick={() => onDeleteItem(item.id)}
+                                                                                        >
+                                                                                            <Trash2 className="h-4 w-4 mr-2" />
+                                                                                            Delete
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                )}
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    );
+                                                                })}
+                                                            </TableBody>
+                                                        </Table>
+                                                    </>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                        {/* END: Add table for leftover items */}
+                                        </>
                                     ) : (
+                                        {/* This is the case where hasSubcategories is false */}
+                                        {/* Items are displayed directly in a single table */}
                                         <Table>
                                             <TableCaption>A list of your {categoryDisplayNames[mainCategory as SubCategory]} inventory items.</TableCaption>
                                             <TableHeader>
