@@ -9,7 +9,9 @@ import type {
   InventoryItem,
   SubCategory,
   Unit,
-  Category,
+  // Category, // Category is derived, not directly used from CsvRow for type validation here
+  SUBCATEGORY_OPTIONS, // Import for validation
+  UNIT_OPTIONS,        // Import for validation
 } from "@/types/inventory";
 import { getMainCategory } from "@/types/inventory";
 import {
@@ -73,23 +75,78 @@ export const CsvImportExport: React.FC<CsvImportExportProps> = ({
       Papa.parse<CsvRow>(csvText, {
         header: true,
         skipEmptyLines: true,
-        complete: (result) => { 
+        complete: (result) => {
+          const validationErrors: string[] = [];
           // Process the parsed rows
-          const processedRows = result.data.map((row: CsvRow) => {
+          const processedRows = result.data.reduce((acc: Omit<InventoryItem, "id">[], row: CsvRow, index: number) => {
             // Convert quantity to number
-            const quantity = parseFloat(row.quantity) || 0; 
-            // Determine category from subcategory
-            const subcategory = row.subcategory as SubCategory || "other";
-            const category = getMainCategory(subcategory);
+            const quantity = parseFloat(row.quantity);
+            if (isNaN(quantity) || quantity < 0) {
+              validationErrors.push(`Row ${index + 2}: Invalid quantity "${row.quantity}". Must be a non-negative number.`);
+              // Skip this row or handle as per requirements, here we skip
+              return acc;
+            }
+
+            // Validate and determine subcategory
+            const subcategoryString = row.subcategory || "other";
+            let subcategory: SubCategory;
+            if (SUBCATEGORY_OPTIONS.includes(subcategoryString as SubCategory)) {
+              subcategory = subcategoryString as SubCategory;
+            } else {
+              validationErrors.push(`Row ${index + 2}: Invalid subcategory "${subcategoryString}". Defaulting to "other".`);
+              subcategory = "other";
+            }
             
-            return {
-              name: row.name,
+            const category = getMainCategory(subcategory);
+
+            // Validate unit
+            const unitString = row.unit;
+            let unit: Unit;
+            if (UNIT_OPTIONS.includes(unitString as Unit)) {
+              unit = unitString as Unit;
+            } else {
+              validationErrors.push(`Row ${index + 2}: Invalid unit "${unitString}". Defaulting to "piece".`);
+              unit = "piece"; // Default to "piece" or handle as error
+            }
+            
+            if (!row.name || row.name.trim() === "") {
+              validationErrors.push(`Row ${index + 2}: Name is required and cannot be empty.`);
+              return acc; // Skip row if name is empty
+            }
+
+            acc.push({
+              name: row.name.trim(),
               quantity,
-              unit: row.unit as Unit,
+              unit,
               subcategory,
               category,
-            };
-          });
+            });
+            return acc;
+          }, []);
+          
+          if (validationErrors.length > 0) {
+            toast({
+              title: "CSV Validation Issues",
+              description: (
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {validationErrors.map((err, i) => <p key={i}>{err}</p>)}
+                </div>
+              ),
+              variant: "destructive",
+              duration: 10000, // Show for longer
+            });
+          }
+
+          if (processedRows.length === 0 && result.data.length > 0) {
+            // All rows might have had errors
+            toast({
+              title: "Import Aborted",
+              description: "No valid rows to import after validation.",
+              variant: "destructive",
+            });
+            setConfirmOpen(false);
+            return;
+          }
           
           setParsedRows(processedRows);
           setConfirmOpen(true);

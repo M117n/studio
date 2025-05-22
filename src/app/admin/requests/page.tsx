@@ -32,7 +32,7 @@ interface RequestedItemDetail {
   quantityToRemove: number;
   unit: string;
   category?: string | null;
-  imageUrl?: string | null;
+  // imageUrl?: string | null; // Removed as per task
 }
 
 // Define the structure of a removal request as fetched from Firestore
@@ -333,11 +333,7 @@ const AdminPanelPage = () => {
                     <br />
                     Quantity: <span className="font-semibold">{item.quantityToRemove} {item.unit}</span>
                     {item.category && <span className="text-xs"> | Category: {item.category}</span>}
-
-                      <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">
-                        View Image
-                      </a>
-                    }
+                    {/* imageUrl and link removed as per task */}
                   </li>
                 ))}
               </ul>

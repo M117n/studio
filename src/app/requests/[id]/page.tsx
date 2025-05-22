@@ -182,9 +182,9 @@ export default function RequestDetailsPage({ params }: { params: { id: string } 
                         <p className="text-sm text-muted-foreground">Quantity: {item.quantityToRemove} {item.unit}</p>
                         {item.category && <p className="text-xs text-muted-foreground">Category: {item.category}</p>}
                       </div>
-
+                      {item.imageUrl && ( // Conditionally render the link
                         <a 
-                          href={item.imageUrl}
+                          href={item.imageUrl} // Now only called if item.imageUrl is truthy
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline text-sm"

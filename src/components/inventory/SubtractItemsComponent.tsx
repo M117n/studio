@@ -118,7 +118,7 @@ export function SubtractItemsComponent({ inventory, userId, userName }: Subtract
       itemId: reqItem.id,
       name: reqItem.name,
       category: reqItem.category || null, // Ensure null if undefined
-      imageUrl: reqItem.imageUrl || null, // Ensure null if undefined, aligns with InventoryItem type
+      // imageUrl: reqItem.imageUrl || null, // Removed as imageUrl is not on InventoryItem type
       quantityToRemove: reqItem.quantityToRemove,
       unit: reqItem.unit,
     }));
