@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { db } from '@/lib/firebase'; // Assuming client-side firebase is configured
+import { db } from '@/lib/firebaseClient'; // Assuming client-side firebase is configured
 import { collection, query, where, getDocs, doc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
-import { useAuth } from '@/contexts/AuthContext'; // Assuming an AuthContext provides user and role
+import { useAuth } from '@/hooks/useAuth'; // Assuming an AuthContext provides user and role
 import { toast } from 'react-hot-toast';
 import styles from '@/styles/AdminRequests.module.css'; // Reusing styles from removal requests page
 
