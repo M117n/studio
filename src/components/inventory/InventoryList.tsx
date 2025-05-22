@@ -91,27 +91,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({
         });
     };
 
-    // Group inventory items by their stored main category
-    const groupedInventory = inventory.reduce(
-        (acc: Record<Category, InventoryItem[]>, item) => {
-            // Default to 'other' if category is undefined
-            const mainCategory = item.category || 'other' as Category;
-            // The check below is no longer strictly necessary since we're ensuring mainCategory exists,
-            // but TypeScript will be happier with it
-            if (!acc[mainCategory]) {
-                acc[mainCategory] = [];
-            }
-            acc[mainCategory].push(item);
-            return acc;
-        },
-        {
-            cooler: [],
-            freezer: [],
-            dry: [],
-            canned: [],
-            other: [],
-        } as Record<Category, InventoryItem[]>
-    );
+    // Dynamically group inventory items by their category
+    const groupedInventory: Record<string, InventoryItem[]> = {};
+    for (const item of inventory) {
+        const mainCategory = item.category || 'other';
+        if (!groupedInventory[mainCategory]) groupedInventory[mainCategory] = [];
+        groupedInventory[mainCategory].push(item);
+    }
+    const sortedCategories = Object.keys(groupedInventory).sort((a, b) => a.localeCompare(b));
 
     // Get subcategories by category from the subcategoryOptions prop
     const subcategories = subcategoryOptions.reduce<{ [key in Category]: SubCategory[] }>(

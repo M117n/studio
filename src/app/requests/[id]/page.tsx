@@ -182,7 +182,7 @@ export default function RequestDetailsPage({ params }: { params: { id: string } 
                         <p className="text-sm text-muted-foreground">Quantity: {item.quantityToRemove} {item.unit}</p>
                         {item.category && <p className="text-xs text-muted-foreground">Category: {item.category}</p>}
                       </div>
-                      {item.imageUrl && (
+
                         <a 
                           href={item.imageUrl}
                           target="_blank" 

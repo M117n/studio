@@ -29,7 +29,6 @@ interface RequestedItemDetail {
   quantityToRemove: number;
   unit: string;
   category?: string | null;
-  imageUrl?: string | null;
 }
 
 interface RequestedAdditionItem {
@@ -38,8 +37,6 @@ interface RequestedAdditionItem {
   subcategory: string;
   quantityToAdd: number;
   unit: string;
-  description?: string;
-  imageUrl?: string;
 }
 
 interface RemovalRequest {
@@ -84,25 +81,11 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
     // Retry mechanism for admin verification
     const checkAdminStatus = async () => {
       try {
-        // First check if the role is already set in the useAuth hook
+        // Only check admin status if role is not already 'admin'
         if (role === 'admin') {
-          // We're good, continue with admin functionality
           setError(null);
         } else if (user) {
-          // User is logged in but role might not be loaded yet
-          // Try to get the user info from the server directly
-          const response = await fetch('/api/auth/me');
-          if (response.ok) {
-            const userData = await response.json();
-            if (userData.role === 'admin') {
-              // User is admin according to the server
-              setError(null);
-            } else {
-              setError("Access Denied: Admin privileges required.");
-            }
-          } else {
-            setError("Failed to verify admin status.");
-          }
+          setError("Access Denied: Admin privileges required.");
         } else {
           setError("You must be logged in as an admin.");
         }
@@ -342,7 +325,7 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
         }
 
         // 2. Add the new item to inventory
-        const { name, category, subcategory, quantityToAdd, unit, description, imageUrl } = request.requestedItem;
+        const { name, category, subcategory, quantityToAdd, unit } = request.requestedItem;
         const inventoryCollectionRef = collection(db, 'inventory');
         const newItemRef = doc(inventoryCollectionRef);
         
@@ -352,8 +335,6 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
           subcategory,
           quantity: quantityToAdd,
           unit,
-          description: description || "",
-          imageUrl: imageUrl || ""
         });
 
         // 3. Update the addition request status and admin details
@@ -640,17 +621,7 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
                         <span className="text-muted-foreground">Category: </span>
                         <span>{request.requestedItem.category} / {request.requestedItem.subcategory}</span>
                       </div>
-                      {request.requestedItem.description && (
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Description: </span>
-                          <span>{request.requestedItem.description}</span>
-                        </div>
-                      )}
-                      {request.requestedItem.imageUrl && (
-                        <div className="col-span-2">
-                          <a href={request.requestedItem.imageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">View Image</a>
-                        </div>
-                      )}
+
                     </div>
                   </div>
                   <div className="flex justify-end space-x-3 pt-4 border-t mt-4">

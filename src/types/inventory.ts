@@ -54,12 +54,8 @@ export interface InventoryItem {
   name: string;
   quantity: number;
   unit: Unit;
-  category?: Category; 
-  subcategory?: SubCategory; 
-
-  // Adding fields from MEM-77849468
-  imageUrl?: string;
-  description?: string;
+  category?: Category;
+  subcategory?: SubCategory;
 }
 
 export type InventoryItemData = Omit<InventoryItem, "id">;

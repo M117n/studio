@@ -333,7 +333,7 @@ const AdminPanelPage = () => {
                     <br />
                     Quantity: <span className="font-semibold">{item.quantityToRemove} {item.unit}</span>
                     {item.category && <span className="text-xs"> | Category: {item.category}</span>}
-                    {item.imageUrl && 
+
                       <a href={item.imageUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline text-xs ml-2">
                         View Image
                       </a>
