@@ -15,8 +15,18 @@ import type { ChangeLogEntry } from "@/types/changeLog";
 type CreateItemPayload = Partial<InventoryItem> & InventoryItemData;
 
 // GET /api/inventory - list all inventory items
-export async function GET() {
+export async function GET(request: Request) { // Added request parameter
   try {
+    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    try {
+      await adminAuth.verifySessionCookie(token, true);
+    } catch (error) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const snapshot = await db.collection("inventory").get();
     const items: InventoryItem[] = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -25,7 +35,11 @@ export async function GET() {
     return NextResponse.json(items);
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to fetch inventory" },
+      {
+        error: "Failed to fetch inventory",
+        ...(error.code && { errorCode: error.code }),
+        ...(error.message && { errorMessage: error.message }),
+      },
       { status: 500 }
     );
   }
@@ -37,21 +51,48 @@ export async function POST(request: Request) {
     // Note: we accept an optional `id` because the front-end may generate one
     // for optimistic UI / offline scenarios.  Keeping that id avoids duplicates
     // when the page is reloaded before the server acknowledges the write.
-    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1] ?? "";
-    const { uid } = await adminAuth.verifySessionCookie(token, true);
+    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    let uid;
+    try {
+      ({ uid } = await adminAuth.verifySessionCookie(token, true));
+    } catch (error) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const data = (await request.json()) as CreateItemPayload;
 
     const { id, name, quantity, unit, category, subcategory } = data as CreateItemPayload;
 
-    if (
-      typeof name !== "string" ||
-      typeof quantity !== "number" ||
-      typeof unit !== "string" ||
-      typeof category !== "string" ||
-      typeof subcategory !== "string"
-    ) {
+    // Enhanced validation
+    if (typeof name !== "string" || name.trim() === "") {
       return NextResponse.json(
-        { error: "Invalid inventory item data" },
+        { error: "Invalid inventory item data", details: "Name must be a non-empty string." },
+        { status: 400 },
+      );
+    }
+    if (typeof quantity !== "number" || quantity <= 0) {
+      return NextResponse.json(
+        { error: "Invalid inventory item data", details: "Quantity must be a number greater than 0." },
+        { status: 400 },
+      );
+    }
+    if (typeof unit !== "string" || unit.trim() === "") {
+      return NextResponse.json(
+        { error: "Invalid inventory item data", details: "Unit must be a non-empty string." },
+        { status: 400 },
+      );
+    }
+    if (typeof category !== "string" || category.trim() === "") {
+      return NextResponse.json(
+        { error: "Invalid inventory item data", details: "Category must be a non-empty string." },
+        { status: 400 },
+      );
+    }
+    if (typeof subcategory !== "string" || subcategory.trim() === "") {
+      return NextResponse.json(
+        { error: "Invalid inventory item data", details: "Subcategory must be a non-empty string." },
         { status: 400 },
       );
     }
