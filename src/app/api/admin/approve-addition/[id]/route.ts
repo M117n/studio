@@ -2,28 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db, adminAuth } from '@/lib/firebaseAdmin'; // Assuming firebaseAdmin is correctly set up
 import { FieldValue } from 'firebase-admin/firestore';
 import { getMainCategory } from '@/types/inventory'; // Assuming this path is correct
-import type { InventoryItemData } from '@/types/inventory';
+import type { InventoryItemData, Unit, SubCategory } from '@/types/inventory';
+import type { AdditionRequestDoc } from '@/types/admin'; // Assuming AdditionRequestDoc is here
 
-// Define a type for the structure of an addition request document (mirroring Part 2's definition)
-interface RequestedAddItemDetail {
-  name: string;
-  category: string; // Original category from form
-  subcategory: string;
-  quantityToAdd: number;
-  unit: string;
-}
-
-interface AdditionRequestDoc {
-  userId: string;
-  userName: string;
-  requestedItem: RequestedAddItemDetail;
-  requestTimestamp: FirebaseFirestore.Timestamp; // Firestore Timestamp type
-  status: 'pending' | 'approved' | 'rejected';
-  // Optional fields for processed requests
-  adminId?: string;
-  adminName?: string;
-  processedTimestamp?: FirebaseFirestore.Timestamp;
-  adminNotes?: string;
+interface AdminUser {
+  uid: string;
+  email?: string;
+  displayName?: string;
+  customClaims?: { [key: string]: any };
 }
 
 export async function POST(
@@ -45,7 +31,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized: Invalid session cookie" }, { status: 401 });
     }
 
-    const { uid } = decodedToken;
+    const { uid } = decodedToken as AdminUser;
 
     // Admin check: Fetch user's custom claims or a document indicating admin role
     // This is a simplified check; a more robust solution might involve checking a 'roles' collection
@@ -77,7 +63,7 @@ export async function POST(
       const { requestedItem } = additionRequestData;
 
       // Derive main category
-      const mainCategory = getMainCategory(requestedItem.subcategory);
+      const mainCategory = getMainCategory(requestedItem.subcategory as SubCategory);
       if (!mainCategory) {
         // This case should ideally be prevented by validation when subcategory is chosen
         throw new Error(`Could not determine main category for subcategory: ${requestedItem.subcategory}`);
@@ -86,8 +72,8 @@ export async function POST(
       const newItemData: InventoryItemData = {
         name: requestedItem.name,
         quantity: requestedItem.quantityToAdd,
-        unit: requestedItem.unit,
-        subcategory: requestedItem.subcategory,
+        unit: requestedItem.unit as Unit, // Cast to Unit
+        subcategory: requestedItem.subcategory as SubCategory, // Cast to SubCategory
         category: mainCategory, // Derived main category
       };
 
