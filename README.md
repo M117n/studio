@@ -24,6 +24,8 @@ StockWatch AI is a full-stack inventory management application built with Next.j
   - Playwright for end-to-end tests
   - TypeScript for static type checking
 
+    [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/M117n/studio)
+
 ## Getting Started
 
 ### Prerequisites
