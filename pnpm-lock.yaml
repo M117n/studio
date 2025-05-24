@@ -138,7 +138,7 @@ importers:
         specifier: ^7.54.2
         version: 7.56.3(react@18.3.1)
       react-hot-toast:
-        specifier: ^2.4.1
+        specifier: ^2.5.2
         version: 2.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       recharts:
         specifier: ^2.15.1
