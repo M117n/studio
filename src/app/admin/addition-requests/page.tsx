@@ -30,14 +30,14 @@ interface AdditionRequest {
 }
 
 const AdminAdditionRequestsPage = () => {
-  const { currentUser, userRole } = useAuth();
+  const { user, role } = useAuth();
   const [requests, setRequests] = useState<AdditionRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<Record<string, boolean>>({}); // Track processing state for each request
 
   const fetchAdditionRequests = useCallback(async () => {
-    if (userRole !== 'admin') {
+    if (role !== 'admin') {
       setError("Access denied. You must be an admin to view this page.");
       setLoading(false);
       return;
@@ -59,13 +59,13 @@ const AdminAdditionRequestsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [userRole]);
+  }, [role]);
 
   useEffect(() => {
-    if (currentUser) { // Ensure user is loaded before checking role
+    if (user) { // Ensure user is loaded before checking role
         fetchAdditionRequests();
     }
-  }, [currentUser, fetchAdditionRequests]);
+  }, [user, fetchAdditionRequests]);
 
   const handleApproveRequest = async (requestId: string) => {
     setProcessing(prev => ({ ...prev, [requestId]: true }));
@@ -107,8 +107,8 @@ const AdminAdditionRequestsPage = () => {
         const requestRef = doc(db, 'additionRequests', requestId);
         await updateDoc(requestRef, {
             status: 'rejected',
-            adminId: currentUser?.uid,
-            adminName: currentUser?.displayName || currentUser?.email || 'Admin', // Use available admin info
+            adminId: user?.uid,
+            adminName: user?.displayName || user?.email || 'Admin', // Use available admin info
             processedTimestamp: serverTimestamp(),
             adminNotes: adminNotes || "", 
         });
@@ -125,7 +125,7 @@ const AdminAdditionRequestsPage = () => {
 
   if (loading && !requests.length) return <div className={styles.loading}>Loading requests...</div>;
   if (error) return <div className={styles.error}>{error}</div>;
-  if (userRole !== 'admin' && !loading) return <div className={styles.error}>Access Denied: You are not authorized to view this page.</div>;
+  if (role !== 'admin' && !loading) return <div className={styles.error}>Access Denied: You are not authorized to view this page.</div>;
   if (!requests.length && !loading) return <div className={styles.noRequests}>No pending addition requests found.</div>;
 
   return (

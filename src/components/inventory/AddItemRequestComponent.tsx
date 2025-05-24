@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Unit, SubCategory, InventoryItem } from '@/types/inventory';
+import { getMainCategory } from '@/types/inventory';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,8 +49,7 @@ interface AddItemRequestComponentProps {
 // Form validation schema
 const formSchema = z.object({
   name: z.string().min(1, { message: "Name is required" }),
-  category: z.string().min(1, { message: "Category is required" }),
-  subcategory: z.string().min(1),
+  subcategory: z.string().min(1, { message: "Subcategory is required" }), // Ensure this aligns with SubCategory type
   quantity: z.coerce.number().positive({ message: "Quantity must be positive" }),
   unit: z.string().min(1, { message: "Unit is required" }),
 });
@@ -63,7 +63,6 @@ export function AddItemRequestComponent({
   userId,
   userName,
 }: AddItemRequestComponentProps) {
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
@@ -72,10 +71,9 @@ export function AddItemRequestComponent({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      category: "inventory",
       subcategory: defaultSubcategory,
       quantity: 0,
-      unit: "kg",
+      unit: unitOptions.length > 0 ? (unitOptions[0] as Unit) : undefined, // Safer default for unit
     },
   });
 
@@ -92,27 +90,28 @@ export function AddItemRequestComponent({
     
     try {
       // Create a structured request object
+      const derivedCategory = getMainCategory(values.subcategory as SubCategory);
       const requestData = {
         userId,
         userName,
         requestedItem: {
           name: values.name,
-          category: values.category,
-          subcategory: values.subcategory,
+          category: derivedCategory,
+          subcategory: values.subcategory as SubCategory,
           quantityToAdd: values.quantity,
-          unit: values.unit,
+          unit: values.unit as Unit, // cast for clarity
         },
       };
 
       // Use server API endpoint instead of direct Firestore access
-      const response = await fetch('/api/inventory/request-addition', {
+      const response = await fetch('/api/inventory/request-addition', { // 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestData),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Request submission failed');
@@ -125,12 +124,10 @@ export function AddItemRequestComponent({
       // Reset the form
       form.reset({
         name: "",
-        category: "inventory",
         subcategory: defaultSubcategory,
         quantity: 0,
-        unit: "kg",
+        unit: unitOptions.length > 0 ? (unitOptions[0] as Unit) : undefined,
       });
-      
       setShowConfirmDialog(false);
     } catch (error: any) {
       console.error("Error submitting addition request:", error);
@@ -229,32 +226,6 @@ export function AddItemRequestComponent({
                       <SelectContent>
                         {subcategoryOptions.map(subcat => (
                           <SelectItem key={subcat} value={subcat}>{subcat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                  control={form.control}
-                name="unit"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Unit</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select unit" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {unitOptions.map(unit => (
-                          <SelectItem key={unit} value={unit}>{unit}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
