@@ -46,3 +46,6 @@ next-env.d.ts
 #windsurf
 /windsurf-launcher.sh
 .windsurf
+
+#notes
+/notes.txt

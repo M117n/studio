@@ -352,6 +352,7 @@ export default function InventoryApp() {
                 searchQuery={searchQuery}
                 subcategoryOptions={subcategoryOptions}
                 unitOptions={unitOptions}
+                role={role}
               />
             </CardContent>
           </Card>
