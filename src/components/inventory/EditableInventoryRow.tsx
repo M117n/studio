@@ -46,6 +46,7 @@ interface EditableInventoryRowProps {
   cancelEditing: () => void;
   onDeleteItem: (id: string) => void;
   categoryDisplayNames: Record<Category | SubCategory, string>;
+  role: string | null;
 }
 
 /** Renders one inventory row, editing or read-only. */
@@ -69,9 +70,11 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
   cancelEditing,
   onDeleteItem,
   categoryDisplayNames,
+  role,
 }) => {
   const isEditing = editingId === item.id;
   const showCategoryCol = editingId !== null;
+  const isAdmin = role === "admin";
   const convertedQuantity = convertUnits(item.quantity, item.unit, defaultUnit);
 
   const renderQty = () =>
@@ -100,6 +103,7 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
             type="text"
             value={editedName}
             onChange={(e) => setEditedName(e.target.value)}
+            disabled={!isAdmin}
           />
         ) : (
           item.name
@@ -117,6 +121,7 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
                 e.target.value === "" ? "" : parseFloat(e.target.value)
               )
             }
+            disabled={!isAdmin}
           />
         ) : (
           renderQty()
@@ -129,6 +134,7 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
           <Select
             onValueChange={(v) => setEditedUnit(v as Unit)}
             defaultValue={editedUnit}
+            disabled={isEditing && !isAdmin && !item.unit}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select a unit" />
@@ -153,6 +159,7 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
             <Select
               onValueChange={(v) => setEditedSubcategory(v as SubCategory)}
               defaultValue={editedSubcategory}
+              disabled={isEditing && !isAdmin && !item.subcategory}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select a category" />
@@ -194,14 +201,16 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
               <Edit className="h-4 w-4 mr-2" />
               Edit
             </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => onDeleteItem(item.id)}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Delete
-            </Button>
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => onDeleteItem(item.id)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            )}
           </div>
         )}
       </TableCell>

@@ -9,16 +9,16 @@ export default function AdminGuard({
 }: {                                                                                                                                   
   children: React.ReactNode;                                                                                                           
 }) {                                                                                                                                   
-  const { isAuthenticated, role, loading } = useAuth();                                                                                
+  const { isAuthenticated, isAdmin, loading } = useAuth();                                                                                
   const router = useRouter();                                                                                                          
                                                                                                                                        
   useEffect(() => {                                                                                                                    
-    if (!loading && (!isAuthenticated || role !== "admin")) {                                                                          
+    if (!loading && (!isAuthenticated || !isAdmin)) {                                                                          
       router.replace("/");                                                                                                             
     }                                                                                                                                  
-  }, [isAuthenticated, role, loading, router]);                                                                                        
+  }, [isAuthenticated, isAdmin, loading, router]);                                                                                        
                                                                                                                                        
-  if (loading || !isAuthenticated || role !== "admin") {                                                                               
+  if (loading || !isAuthenticated || !isAdmin) {                                                                               
     return <p>Checking permissions…</p>;                                                                                               
   }                                                                                                                                    
                                                                                                                                        

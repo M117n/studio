@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { getFirestore, collection, query, where, onSnapshot, Timestamp, doc, getDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { auth } from '@/lib/firebaseClient'; 
-import { Bell, CheckCircle2, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { auth } from '@/lib/firebaseClient';
+import { Bell, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react'; // Removed X as it wasn't used in the provided snippet for this part
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,8 +40,52 @@ interface Notification {
   requestId: string;
   timestamp: Timestamp;
   isRead: boolean;
-  adminNotes?: string; 
+  adminNotes?: string;
+  _friendlyMessageCache?: string; // Cache for the enhanced message
 }
+
+// Helper function to generate more user-friendly notification messages
+const generateFriendlyMessage = (
+  originalMessage: string,
+  notificationType: 'request_approved' | 'request_rejected',
+  items?: RequestedItemDetail[] // Optional: for full version with quantity
+): string => {
+  
+  // Basic cleanup: remove ID and trailing "Inventory updated."
+  let friendlyMsg = originalMessage.replace(/\s\(ID: [^\)]+\)/, ''); // Removes " (ID: ...)"
+  friendlyMsg = friendlyMsg.replace(/\.?\s*Inventory updated\.*$/i, ''); // Removes ". Inventory updated." or " Inventory updated" etc.
+
+  // Ensure message ends with a period if it doesn't have one after stripping "Inventory updated"
+  friendlyMsg = friendlyMsg.trim();
+  if (friendlyMsg.length > 0 && !['.', '!', '?'].includes(friendlyMsg[friendlyMsg.length - 1])) {
+      friendlyMsg += '.';
+  }
+
+  if (items && items.length > 0) {
+    const firstItem = items[0];
+    const itemName = firstItem.name;
+    const quantity = firstItem.quantityToRemove; // Assuming this is the magnitude
+    const unit = firstItem.unit;
+    const status = notificationType === 'request_approved' ? 'approved' : 'rejected';
+
+    let actionPrefix = "Your request"; // Generic fallback
+    // Try to be more specific based on original message patterns
+    if (originalMessage.toLowerCase().startsWith("your item addition request")) {
+        actionPrefix = "Your item addition request";
+    } else if (originalMessage.toLowerCase().startsWith("your item removal request")) {
+        actionPrefix = "Your item removal request";
+    }
+    // Add more specific parsers for other phrasings if needed.
+
+    if (items.length > 1) {
+      friendlyMsg = `${actionPrefix} for ${quantity} ${unit} of ${itemName} and other items has been ${status}.`;
+    } else {
+      friendlyMsg = `${actionPrefix} for ${quantity} ${unit} of ${itemName} has been ${status}.`;
+    }
+  }
+  return friendlyMsg;
+};
+
 
 const UserNotificationsBell = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -79,8 +123,14 @@ const UserNotificationsBell = () => {
       const fetchedNotifications: Notification[] = [];
       let count = 0;
       querySnapshot.forEach((doc) => {
-        const data = doc.data() as Omit<Notification, 'id'>;
-        fetchedNotifications.push({ id: doc.id, ...data });
+        const data = doc.data() as Omit<Notification, 'id' | '_friendlyMessageCache'>; // Exclude cache from DB cast
+        // Retain existing cache if any, or set to undefined
+        const existingNotification = notifications.find(n => n.id === doc.id);
+        fetchedNotifications.push({ 
+            id: doc.id, 
+            ...data, 
+            _friendlyMessageCache: existingNotification?._friendlyMessageCache 
+        });
         if (!data.isRead) {
           count++;
         }
@@ -96,7 +146,7 @@ const UserNotificationsBell = () => {
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [currentUser]); // Removed 'notifications' from dependency array to avoid potential re-runs if only _friendlyMessageCache changes
 
   const handleMarkAsRead = async (notificationId: string) => {
     if (!currentUser) {
@@ -109,7 +159,6 @@ const UserNotificationsBell = () => {
     const notificationRef = doc(db, 'notifications', notificationId);
     
     try {
-      // First get the notification to verify it belongs to this user
       const notificationSnap = await getDoc(notificationRef);
       if (!notificationSnap.exists()) {
         throw new Error("Notification not found");
@@ -120,8 +169,9 @@ const UserNotificationsBell = () => {
         throw new Error("Permission denied: Not your notification");
       }
       
-      // Now update the notification
       await updateDoc(notificationRef, { isRead: true });
+      // No need to manually update local state for isRead here, 
+      // onSnapshot should reflect this change from Firestore.
     } catch (error: any) {
       console.error("Error marking notification as read: ", error);
       toast({ 
@@ -142,6 +192,7 @@ const UserNotificationsBell = () => {
     });
     try {
       await batch.commit();
+      // onSnapshot should update the UI.
     } catch (error) {
       console.error("Error marking all notifications as read: ", error);
       toast({ title: "Error", description: "Could not update all notification statuses.", variant: "destructive" });
@@ -150,7 +201,6 @@ const UserNotificationsBell = () => {
 
   const fetchRequestDetails = async (notificationId: string, requestId: string) => {
     if (expandedNotification === notificationId) {
-      // If already expanded, collapse it
       setExpandedNotification(null);
       setRequestDetails(null);
       return;
@@ -158,105 +208,91 @@ const UserNotificationsBell = () => {
 
     setIsLoadingDetails(true);
     setExpandedNotification(notificationId);
+    // setRequestDetails(null); // Clear previous details while loading new ones
 
     try {
       const db = getFirestore(auth.app);
       
-      // Check if requestId is valid
       if (!requestId || requestId.trim() === '') {
-        // Create placeholder for invalid request ID instead of throwing error
         setRequestDetails({
-          id: 'not-found',
-          userId: '',
-          userName: '',
-          requestedItems: [],
-          requestTimestamp: Timestamp.now(),
-          status: 'pending', // Using valid status from the interface
+          id: 'not-found', userId: '', userName: '', requestedItems: [],
+          requestTimestamp: Timestamp.now(), status: 'pending',
           adminNotes: 'This request information is no longer available.'
         });
         return;
       }
 
-      // Get request with explicit error handling
       const requestRef = doc(db, 'removalRequests', requestId);
       let requestSnap;
       
       try {
         requestSnap = await getDoc(requestRef);
       } catch (fetchError) {
-        // Handle Firestore errors silently
         setRequestDetails({
-          id: 'error',
-          userId: '',
-          userName: '',
-          requestedItems: [],
-          requestTimestamp: Timestamp.now(),
-          status: 'rejected', // Using valid status from the interface
+          id: 'error', userId: '', userName: '', requestedItems: [],
+          requestTimestamp: Timestamp.now(), status: 'rejected',
           adminNotes: 'There was an error retrieving this request.'
         });
         return;
       }
 
       if (!requestSnap.exists()) {
-        // Create a placeholder for a request that doesn't exist anymore
-        // instead of showing an error to the user
         setRequestDetails({
-          id: 'deleted',
-          userId: '',
-          userName: '',
-          requestedItems: [],
-          requestTimestamp: Timestamp.now(),
-          status: 'approved', // Using valid status from the interface
+          id: 'deleted', userId: '', userName: '', requestedItems: [],
+          requestTimestamp: Timestamp.now(), status: 'approved',
           adminNotes: 'This request has been processed and is no longer available.'
         });
         return;
       }
 
-      // Get data with proper type cast
       const requestData = requestSnap.data();
       if (!requestData) {
         setRequestDetails({
-          id: 'empty',
-          userId: '',
-          userName: '',
-          requestedItems: [],
-          requestTimestamp: Timestamp.now(),
-          status: 'pending', // Using valid status from the interface
+          id: 'empty', userId: '', userName: '', requestedItems: [],
+          requestTimestamp: Timestamp.now(), status: 'pending',
           adminNotes: 'This request has no data.'
         });
         return;
       }
 
-      // Ensure data has expected fields
       const removalRequest: RemovalRequest = {
         id: requestSnap.id,
         userId: requestData.userId || '',
         userName: requestData.userName || '',
         requestedItems: requestData.requestedItems || [],
-        requestTimestamp: requestData.requestTimestamp,
+        requestTimestamp: requestData.requestTimestamp || Timestamp.now(), // Added fallback for timestamp
         status: requestData.status || 'pending',
         adminId: requestData.adminId,
         adminName: requestData.adminName,
         processedTimestamp: requestData.processedTimestamp,
         adminNotes: requestData.adminNotes
       };
-
       setRequestDetails(removalRequest);
       
-      // Mark notification as read when expanding
-      if (!notifications.find(n => n.id === notificationId)?.isRead) {
+      const currentNotif = notifications.find(n => n.id === notificationId);
+      if (currentNotif && !currentNotif.isRead) {
         handleMarkAsRead(notificationId);
       }
       
+      if (currentNotif) {
+        setNotifications(prevNotifications =>
+          prevNotifications.map(n => {
+            if (n.id === notificationId) {
+              return { 
+                ...n, 
+                _friendlyMessageCache: generateFriendlyMessage(n.message, n.type, removalRequest.requestedItems) 
+              };
+            }
+            return n;
+          })
+        );
+      }
+      
     } catch (error) {
-      // Fall back to a friendly message rather than showing an error
+      console.error("Error fetching request details:", error);
       setRequestDetails({
-        id: 'error',
-        userId: '',
-        userName: '',
-        requestedItems: [],
-        requestTimestamp: Timestamp.now(),
-        status: 'rejected', // Using valid status from the interface
+        id: 'error-generic', userId: '', userName: '', requestedItems: [],
+        requestTimestamp: Timestamp.now(), status: 'rejected',
         adminNotes: 'An error occurred while retrieving this request.'
       });
     } finally {
@@ -303,7 +339,10 @@ const UserNotificationsBell = () => {
                       <span className="flex-shrink-0 h-2 w-2 mt-1.5 bg-blue-500 rounded-full" aria-hidden="true"></span>
                     )}
                     <div className="flex-1">
-                      <p className={`text-sm ${!notif.isRead ? 'font-semibold' : 'text-muted-foreground'}`}>{notif.message}</p>
+                      {/* UPDATED MESSAGE DISPLAY */}
+                      <p className={`text-sm ${!notif.isRead ? 'font-semibold' : 'text-muted-foreground'}`}>
+                        {notif._friendlyMessageCache || generateFriendlyMessage(notif.message, notif.type, undefined)}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {new Date(notif.timestamp.toDate()).toLocaleDateString()} {new Date(notif.timestamp.toDate()).toLocaleTimeString()}
                       </p>
@@ -334,6 +373,7 @@ const UserNotificationsBell = () => {
                   </div>
                 </div>
                 
+                {/* Using the bug fix solution for item display and admin notes from previous interaction */}
                 {expandedNotification === notif.id && (
                   <div className="px-3 pb-3 pt-0">
                     <Separator className="my-2" />
@@ -350,23 +390,39 @@ const UserNotificationsBell = () => {
                               <p className="text-xs text-muted-foreground">
                                 Status: <span className="font-medium capitalize">{requestDetails.status}</span>
                               </p>
-                              {notif.adminNotes && (
+                              
+                              {notif.adminNotes && requestDetails.adminNotes && notif.adminNotes !== requestDetails.adminNotes ? (
+                                <>
+                                  <div className="mt-2">
+                                    <p className="text-xs font-semibold">Admin Notes (on Notification):</p>
+                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notif.adminNotes}</p>
+                                  </div>
+                                  <div className="mt-2">
+                                    <p className="text-xs font-semibold">Admin Notes (on Request):</p>
+                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{requestDetails.adminNotes}</p>
+                                  </div>
+                                </>
+                              ) : (notif.adminNotes || requestDetails.adminNotes) ? (
                                 <div className="mt-2">
                                   <p className="text-xs font-semibold">Admin Notes:</p>
-                                  <p className="text-xs text-muted-foreground">{notif.adminNotes}</p>
+                                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notif.adminNotes || requestDetails.adminNotes}</p>
                                 </div>
-                              )}
+                              ) : null}
                             </div>
                             
                             <div>
                               <h5 className="text-xs font-semibold mb-1">Items {notif.type === 'request_approved' ? 'Removed' : 'Requested'}:</h5>
-                              <ul className="space-y-1">
-                                {requestDetails.requestedItems.map((item, index) => (
-                                  <li key={index} className="text-xs">
-                                    <span className="font-medium">{item.name}</span>: {item.quantityToRemove} {item.unit}
-                                  </li>
-                                ))}
-                              </ul>
+                              {requestDetails.requestedItems && requestDetails.requestedItems.length > 0 ? (
+                                <ul className="space-y-1">
+                                  {requestDetails.requestedItems.map((item, index) => (
+                                    <li key={index} className="text-xs">
+                                      <span className="font-medium">{item.name}</span>: {item.quantityToRemove} {item.unit}
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">No items listed for this request.</p>
+                              )}
                             </div>
                           </div>
                         </CardContent>
