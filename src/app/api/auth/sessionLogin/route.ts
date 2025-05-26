@@ -7,23 +7,36 @@ import { FieldValue } from "firebase-admin/firestore";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  console.time("sessionLogin_total"); // Start total timer
+
   const { idToken } = await req.json();              // lo manda el cliente
   if (!idToken) {
+    console.timeEnd("sessionLogin_total"); // End total timer on error
     return NextResponse.json({ error: "missing idToken" }, { status: 400 });
   }
 
   const expiresIn = 1000 * 60 * 60 * 24 * 5; // 5 días
+  
+  console.time("createSessionCookie");
   const sessionCookie = await adminAuth.createSessionCookie(idToken, {
     expiresIn,
   });
+  console.timeEnd("createSessionCookie");
 
   // --- Add user to Firestore 'users' collection if not already present ---
   try {
+    console.time("verifyIdToken");
     const decodedToken = await adminAuth.verifyIdToken(idToken);
+    console.timeEnd("verifyIdToken");
+
     const userRef = db.collection('users').doc(decodedToken.uid);
+    
+    console.time("firestoreUserGet");
     const userDoc = await userRef.get();
+    console.timeEnd("firestoreUserGet");
 
     if (!userDoc.exists) {
+      console.time("firestoreUserSet");
       await userRef.set({
         uid: decodedToken.uid,
         email: decodedToken.email || null,
@@ -32,6 +45,7 @@ export async function POST(req: NextRequest) {
         createdAt: FieldValue.serverTimestamp(),
         // You can add other default fields here, e.g., photoURL: decodedToken.picture || null
       });
+      console.timeEnd("firestoreUserSet");
       console.log(`New user ${decodedToken.uid} added to 'users' collection.`);
     }
   } catch (error) {
@@ -54,5 +68,6 @@ export async function POST(req: NextRequest) {
     path:   "/",
   });
 
+  console.timeEnd("sessionLogin_total"); // End total timer on success
   return res;
 }
