@@ -46,7 +46,7 @@ interface EditableInventoryRowProps {
   cancelEditing: () => void;
   onDeleteItem: (id: string) => void;
   categoryDisplayNames: Record<Category | SubCategory, string>;
-  role: string | null;
+  isAdmin: boolean;
 }
 
 /** Renders one inventory row, editing or read-only. */
@@ -70,11 +70,10 @@ export const EditableInventoryRow: React.FC<EditableInventoryRowProps> = ({
   cancelEditing,
   onDeleteItem,
   categoryDisplayNames,
-  role,
+  isAdmin,
 }) => {
   const isEditing = editingId === item.id;
   const showCategoryCol = editingId !== null;
-  const isAdmin = role === "admin";
   const convertedQuantity = convertUnits(item.quantity, item.unit, defaultUnit);
 
   const renderQty = () =>

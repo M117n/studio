@@ -31,18 +31,15 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'User ID (uid) is required' }, { status: 400 });
     }
     
-    // Target UID specified in the request
-    const targetUid = '9CuI7xQ8FPOscSoArVX3aC3SPoZ2';
-
     // Verify the target user exists in Firebase Auth
     try {
-      await adminAuth.getUser(targetUid);
+      await adminAuth.getUser(uid);
     } catch (error) {
       return Response.json({ error: 'User not found in authentication system' }, { status: 404 });
     }
     
     // Get user document reference
-    const userRef = db.collection('users').doc(targetUid);
+    const userRef = db.collection('users').doc(uid);
     const userDoc = await userRef.get();
     
     if (userDoc.exists) {
@@ -54,9 +51,9 @@ export async function POST(request: NextRequest) {
       });
     } else {
       // Create new user document if it doesn't exist
-      const targetUser = await adminAuth.getUser(targetUid);
+      const targetUser = await adminAuth.getUser(uid);
       await userRef.set({
-        uid: targetUid,
+        uid: uid,
         role: 'admin',
         email: targetUser.email || '',
         name: targetUser.displayName || 'Admin User',
@@ -64,19 +61,35 @@ export async function POST(request: NextRequest) {
         createdBy: requestingUserUid
       });
     }
+
+    // Set custom claim { admin: true }
+    await adminAuth.setCustomUserClaims(uid, { admin: true });
+    console.log(`Custom claim { admin: true } set for user ${uid}.`); // Optional: for logging
+
+    // Add/Update user in 'adminUsers' collection
+    const userRecord = await adminAuth.getUser(uid); // Use the correct UID variable
+    const adminUserRef = db.collection('adminUsers').doc(uid); // Use the correct UID variable
+    const adminUserData = {
+      uid: uid, // Use the correct UID variable
+      email: userRecord.email || null,
+      displayName: userRecord.displayName || null,
+      adminSince: FieldValue.serverTimestamp() // Make sure FieldValue is imported from 'firebase-admin/firestore'
+    };
+    await adminUserRef.set(adminUserData, { merge: true });
+    console.log(`User ${uid} added/updated in 'adminUsers' collection.`); // Optional: for logging
     
     // Log this admin action
     await db.collection('actionLogs').add({
       actionType: 'set_admin_role',
-      userId: targetUid,
+      userId: uid,
       adminId: requestingUserUid,
       timestamp: FieldValue.serverTimestamp(),
       details: {
-        message: `User ${targetUid} was granted admin role`
+        message: `User ${uid} was granted admin role`
       }
     });
     
-    return Response.json({ success: true, message: `User ${targetUid} has been made an admin` });
+    return Response.json({ success: true, message: `User ${uid} has been made an admin` });
   } catch (error: any) {
     console.error('Error making user admin:', error);
     return Response.json({ error: error.message || 'Failed to update user role' }, { status: 500 });

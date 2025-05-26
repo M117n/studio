@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Dialog,
@@ -25,19 +25,61 @@ import {
 import { Button } from "@/components/ui/button";
 import { PendingRequestsPanel } from "./PendingRequestsPanel";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { db } from "@/lib/firebaseClient";
+import { collection, getDocs, query, where, doc, deleteDoc } from "firebase/firestore";
+
+interface AdminUserData {
+  uid: string;
+  email: string;
+  name?: string;
+}
 
 export function AdminPanelModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { user: currentUser, isAdmin: currentIsAdmin } = useAuth();
+
+  const [adminUsersList, setAdminUsersList] = useState<AdminUserData[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState<string | null>(null);
+  const [revokeLoading, setRevokeLoading] = useState<string | null>(null);
+
+  const masterAdminUid = process.env.NEXT_PUBLIC_MASTER_ADMIN_UID;
+
+  const fetchAdminUsers = async () => {
+    if (!currentIsAdmin) return;
+    setUsersLoading(true);
+    setUsersError(null);
+    try {
+      const adminUsersCol = collection(db, "adminUsers");
+      const q = query(adminUsersCol);
+      const querySnapshot = await getDocs(q);
+      const users: AdminUserData[] = [];
+      querySnapshot.forEach((doc) => {
+        users.push({ uid: doc.id, ...doc.data() } as AdminUserData);
+      });
+      setAdminUsersList(users);
+    } catch (error: any) {
+      console.error("Error fetching admin users:", error);
+      setUsersError("Failed to load admin users. " + error.message);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && activeTab === "users") {
+      fetchAdminUsers();
+    }
+  }, [isOpen, activeTab, currentIsAdmin]);
 
   const handleMakeAdmin = async () => {
     setIsLoading(true);
     try {
-      // Using the hardcoded UID as requested
       const targetUid = '9CuI7xQ8FPOscSoArVX3aC3SPoZ2';
-      
       const response = await fetch('/api/admin/make-admin', {
         method: 'POST',
         headers: {
@@ -45,13 +87,10 @@ export function AdminPanelModal() {
         },
         body: JSON.stringify({ uid: targetUid }),
       });
-      
       const data = await response.json();
-      
       if (!response.ok) {
         throw new Error(data.error || 'Failed to make user admin');
       }
-      
       toast({
         title: "Success",
         description: `User with UID: ${targetUid} is now an admin`,
@@ -68,8 +107,51 @@ export function AdminPanelModal() {
     }
   };
 
+  const handleRevokeAdmin = async (targetUid: string) => {
+    if (!currentUser || currentUser.uid !== masterAdminUid) {
+      toast({ title: "Error", description: "Only the Master Admin can revoke privileges.", variant: "destructive" });
+      return;
+    }
+    if (targetUid === masterAdminUid) {
+      toast({ title: "Error", description: "Master Admin cannot revoke their own privileges.", variant: "destructive" });
+      return;
+    }
+
+    setRevokeLoading(targetUid);
+    try {
+      const response = await fetch('/api/admin/revoke-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: targetUid }),
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to revoke admin privileges.");
+      }
+
+      toast({ title: "Success", description: data.message || `Admin privileges revoked for user ${targetUid}` });
+      
+      // Remove user from local list
+      setAdminUsersList(prev => prev.filter(user => user.uid !== targetUid));
+      
+      // The 'adminUsers' collection document is deleted by the API route.
+
+    } catch (error: any) {
+      console.error("Error revoking admin:", error);
+      toast({ title: "Error", description: error.message || "Failed to revoke admin privileges.", variant: "destructive" });
+    } finally {
+      setRevokeLoading(null);
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (open && activeTab === 'users') {
+        fetchAdminUsers();
+      }
+    }}>
       <DialogTrigger asChild>
         <Button 
           variant="outline"
@@ -159,12 +241,36 @@ export function AdminPanelModal() {
               <TabsContent value="users">
                 <Card>
                   <CardHeader>
-                    <CardTitle>User Management</CardTitle>
+                    <CardTitle>Admin User Management</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-muted-foreground">
-                      User management features will appear here.
-                    </p>
+                    {usersLoading && <p>Loading admin users...</p>}
+                    {usersError && <p className="text-red-500">{usersError}</p>}
+                    {!usersLoading && !usersError && adminUsersList.length === 0 && (
+                      <p className="text-muted-foreground">No admin users found.</p>
+                    )}
+                    {!usersLoading && !usersError && adminUsersList.length > 0 && (
+                      <ul className="space-y-2">
+                        {adminUsersList.map((admin) => (
+                          <li key={admin.uid} className="flex justify-between items-center p-2 border rounded">
+                            <div>
+                              <p className="font-semibold">{admin.name || admin.email}</p>
+                              <p className="text-sm text-muted-foreground">{admin.uid}</p>
+                            </div>
+                            {currentUser?.uid === masterAdminUid && admin.uid !== masterAdminUid && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRevokeAdmin(admin.uid)}
+                                disabled={revokeLoading === admin.uid}
+                              >
+                                {revokeLoading === admin.uid ? "Revoking..." : "Revoke Admin"}
+                              </Button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
