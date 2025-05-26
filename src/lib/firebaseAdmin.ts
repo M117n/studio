@@ -1,16 +1,7 @@
 // lib/firebaseAdmin.ts
-import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import * as admin from "firebase-admin";
-
-if (!admin.apps.length) {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, "\n"),      }),
-    });
-}
+import { getAuth } from 'firebase-admin/auth';
 
 /**
  * Helper to read a required environment variable or throw an error.
@@ -21,24 +12,38 @@ function getEnv(name: string): string {
   return v;
 }
 
-// Read and validate Firebase credentials from env
-const projectId   = getEnv('FIREBASE_PROJECT_ID');
-const clientEmail = getEnv('FIREBASE_CLIENT_EMAIL');
-const privateKey = getEnv("FIREBASE_PRIVATE_KEY")
-  // Convert escaped newlines that come through as two characters ("\n")
-  .replace(/\\n/g, "\n")
-  // Convert escaped returns ("\r") as well
-  .replace(/\\r/g, "\r")
-  // Trim surrounding quotes that may be accidentally included when pasting
-  .replace(/^"|"$/g, "");
+let dbInstance: ReturnType<typeof getFirestore>;
+let authInstance: ReturnType<typeof getAuth>;
 
-// Initialize Firebase Admin SDK
+// Initialize Firebase Admin SDK only if no apps are already initialized.
 if (!getApps().length) {
-  initializeApp({
-    credential: cert({ projectId, clientEmail, privateKey }),
-  });
+  console.log("Attempting to initialize Firebase Admin SDK...");
+  // Read and validate Firebase credentials from env
+  const projectId   = getEnv('FIREBASE_PROJECT_ID');
+  const clientEmail = getEnv('FIREBASE_CLIENT_EMAIL');
+  const privateKey = getEnv("FIREBASE_PRIVATE_KEY")
+    .replace(/\\n/g, "\n")
+    .replace(/\\r/g, "\r")
+    .replace(/^"|"$/g, "");
+
+  try {
+    initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+    });
+    console.log("Firebase Admin SDK initialized successfully.");
+  } catch (error) {
+    console.error("Error initializing Firebase Admin SDK:", error);
+    // Depending on your error handling strategy, you might want to throw the error
+    // or handle it in a way that prevents the app from starting/running without Firebase Admin.
+  }
+} else {
+  console.log("Firebase Admin SDK already initialized.");
 }
 
-// Firestore database instance
-export const db = getFirestore();
-export const adminAuth = admin.auth();
+// Get Firestore and Auth instances. These calls are designed to be safe
+// even if called multiple times, returning the existing instance.
+dbInstance = getFirestore();
+authInstance = getAuth();
+
+export const db = dbInstance;
+export const adminAuth = authInstance;

@@ -39,8 +39,6 @@ export function AuthPanel({ initialMode = 'login' }: AuthPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
-      // Reload to update authentication state
-      window.location.reload();
     } catch (err: any) {
       setError(err.message);
     }
@@ -65,8 +63,6 @@ export function AuthPanel({ initialMode = 'login' }: AuthPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken }),
       });
-      // Reload to update authentication state
-      window.location.reload();
     } catch (err: any) {
       setError(err.message);
     }
