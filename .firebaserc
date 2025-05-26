@@ -1,5 +1,9 @@
 {
   "projects": {
-    "default": "smartstock-e8146"
-  }
+    "default": "smartstock-e8146",
+    "dev": "smartstock-e8146",
+    "prod": "shawinv-2c99a"
+  },
+  "targets": {},
+  "etags": {}
 }

@@ -12,11 +12,11 @@ export const setAdminRole = onCall(
       }
   
       const caller = await admin.auth().getUser(req.auth.uid);
-      if (caller.customClaims?.role !== "admin") {
+      if (caller.customClaims?.admin !== true) {
         throw new HttpsError("permission-denied", "Must be an admin");
       }
   
-      await admin.auth().setCustomUserClaims(uid, { role: "admin" });
+      await admin.auth().setCustomUserClaims(uid, { admin: true });
       return { message: `User ${uid} is now an admin.` };
     }
   );

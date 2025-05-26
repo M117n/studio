@@ -88,7 +88,7 @@ export default function InventoryApp() {
   const currentUser = auth.currentUser;
   const userId = currentUser?.uid;
   const userName = currentUser?.displayName || currentUser?.email || undefined; // Ensure it's string or undefined
-  const { role } = useAuth(); // Get user role from useAuth hook
+  const { isAdmin, user, isAuthenticated, loading: authLoading } = useAuth(); // Get user admin status and other auth data
 
   /* ------------------------- local state ------------------------- */
   const [changeLog, setChangeLog] = useState<string[]>(() =>
@@ -106,6 +106,7 @@ export default function InventoryApp() {
   const [darkMode, setDarkMode] = useState(false);
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
   const [subtractMode, setSubtractMode] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   /* ----------------------------- refs ----------------------------- */
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -113,9 +114,34 @@ export default function InventoryApp() {
   /* ------------------------ auth helpers ------------------------- */
   const router = useRouter();
   const handleLogout = async () => {
-    await fetch("/api/auth/sessionLogout", { method: "POST" });
-    await signOut(auth);
-    router.replace("/");
+    setLogoutLoading(true);
+    try {
+      // 1. Sign out from Firebase client-side
+      await auth.signOut();
+      
+      // 2. Clear server-side session cookie
+      const response = await fetch("/api/auth/sessionLogout", { method: "POST" });
+      if (!response.ok) {
+        // Even if server-side fails, client is signed out. Log error but proceed.
+        console.error("Failed to clear server session, but client signed out.");
+        // Optionally show a less severe toast or just log
+      }
+      
+      toast({ title: "Logged Out", description: "You have been successfully logged out." });
+      
+      // 3. Redirect to login page (or homepage)
+      router.push("/auth/login"); // Or your desired redirect path
+
+    } catch (error: any) {
+      console.error("Error during logout:", error);
+      toast({
+        title: "Logout Error",
+        description: error.message || "Failed to logout. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLogoutLoading(false);
+    }
   };
 
   /* ----------------------- local persistence --------------------- */
@@ -258,13 +284,11 @@ export default function InventoryApp() {
         />
         
         {/* Admin Role Indicator and Panel */}
-        {role === 'admin' ? (
-          <>
-            <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-              Admin Role: Active
-            </span>
-            <AdminPanelModal />
-          </>
+        {isAdmin && <AdminPanelModal />}
+        {isAdmin ? (
+          <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+            Admin Role: Active
+          </span>
         ) : (
           <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
             Regular User
@@ -306,9 +330,9 @@ export default function InventoryApp() {
             </div>
 
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout}>
+            <DropdownMenuItem onClick={handleLogout} disabled={logoutLoading}>
               <LogOut className="mr-2 h-4 w-4" />
-              <span>Logout</span>
+              <span>{logoutLoading ? "Logging out..." : "Logout"}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -352,7 +376,7 @@ export default function InventoryApp() {
                 searchQuery={searchQuery}
                 subcategoryOptions={subcategoryOptions}
                 unitOptions={unitOptions}
-                role={role}
+                isAdmin={isAdmin}
               />
             </CardContent>
           </Card>

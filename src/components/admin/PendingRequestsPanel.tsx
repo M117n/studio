@@ -75,14 +75,14 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
   const [activeTab, setActiveTab] = useState<'removal' | 'addition'>('removal');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, role } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   useEffect(() => {
     // Retry mechanism for admin verification
     const checkAdminStatus = async () => {
       try {
         // Only check admin status if role is not already 'admin'
-        if (role === 'admin') {
+        if (isAdmin) {
           setError(null);
         } else if (user) {
           setError("Access Denied: Admin privileges required.");
@@ -96,7 +96,7 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
     };
     
     checkAdminStatus();
-  }, [role, user]);
+  }, [isAdmin, user]);
 
   // Effect to fetch requests - separate from admin verification
   useEffect(() => {
@@ -149,7 +149,7 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
       unsubscribeRemoval();
       unsubscribeAddition();
     };
-  }, [role]);
+  }, [isAdmin]);
 
   const handleApproveRequest = async (request: RemovalRequest) => {
     if (!user?.uid) {

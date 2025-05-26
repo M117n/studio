@@ -35,7 +35,7 @@ interface InventoryListProps {
   searchQuery: string;
   subcategoryOptions: readonly SubCategory[];
   unitOptions: readonly Unit[];
-  role: string | null;
+  isAdmin: boolean;
 }
 
 export const InventoryList: React.FC<InventoryListProps> = ({
@@ -47,7 +47,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   searchQuery,
   subcategoryOptions,
   unitOptions,
-  role,
+  isAdmin,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
@@ -227,7 +227,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
                 cancelEditing={cancelEditing}
                 onDeleteItem={onDeleteItem}
                 categoryDisplayNames={categoryDisplayNames}
-                role={role}
+                isAdmin={isAdmin}
               />
             ))}
           </TableBody>
@@ -316,7 +316,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
               cancelEditing={cancelEditing}
               onDeleteItem={onDeleteItem}
               categoryDisplayNames={categoryDisplayNames}
-              role={role}
+              isAdmin={isAdmin}
             />
           ))}
         </TableBody>
