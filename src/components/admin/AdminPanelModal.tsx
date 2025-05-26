@@ -28,6 +28,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { db } from "@/lib/firebaseClient";
 import { collection, getDocs, query, where, doc, deleteDoc } from "firebase/firestore";
+import { Input } from "@/components/ui/input";
 
 interface AdminUserData {
   uid: string;
@@ -46,6 +47,7 @@ export function AdminPanelModal() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [revokeLoading, setRevokeLoading] = useState<string | null>(null);
+  const [targetAdminUid, setTargetAdminUid] = useState('');
 
   const masterAdminUid = process.env.NEXT_PUBLIC_MASTER_ADMIN_UID;
 
@@ -77,15 +79,27 @@ export function AdminPanelModal() {
   }, [isOpen, activeTab, currentIsAdmin]);
 
   const handleMakeAdmin = async () => {
+    if (currentUser?.uid !== masterAdminUid) {
+      toast({ title: "Error", description: "Only the Master Admin can perform this action.", variant: "destructive" });
+      return;
+    }
+    if (!targetAdminUid.trim()) {
+      toast({ title: "Error", description: "Please enter the UID of the user to make admin.", variant: "destructive" });
+      return;
+    }
+    if (targetAdminUid.trim() === masterAdminUid) {
+      toast({ title: "Error", description: "Master Admin cannot target their own account.", variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const targetUid = '9CuI7xQ8FPOscSoArVX3aC3SPoZ2';
       const response = await fetch('/api/admin/make-admin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ uid: targetUid }),
+        body: JSON.stringify({ uid: targetAdminUid.trim() }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -93,8 +107,10 @@ export function AdminPanelModal() {
       }
       toast({
         title: "Success",
-        description: `User with UID: ${targetUid} is now an admin`,
+        description: `User with UID: ${targetAdminUid.trim()} is now an admin.`,
       });
+      setTargetAdminUid('');
+      fetchAdminUsers();
     } catch (error: any) {
       console.error('Error making user admin:', error);
       toast({
@@ -179,11 +195,11 @@ export function AdminPanelModal() {
               </TabsList>
               
               {/* Overview Tab */}
-              <TabsContent value="overview" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <TabsContent value="overview">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
                   <Card>
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">Pending Requests</CardTitle>
+                      <CardTitle className="text-lg">View Removal Requests</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <Button 
@@ -196,21 +212,31 @@ export function AdminPanelModal() {
                     </CardContent>
                   </Card>
                   
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">Make User Admin</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Button 
-                        variant="outline" 
-                        onClick={handleMakeAdmin}
-                        disabled={isLoading}
-                        className="w-full"
-                      >
-                        {isLoading ? 'Processing...' : 'Assign Admin Role'}
-                      </Button>
-                    </CardContent>
-                  </Card>
+                  {/* Conditionally render Make User Admin Card */}
+                  {currentUser?.uid === masterAdminUid && (
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-lg">Make User Admin</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <Input 
+                          type="text" 
+                          placeholder="Enter UID of user to make admin" 
+                          value={targetAdminUid} 
+                          onChange={(e) => setTargetAdminUid(e.target.value)}
+                          className="mb-2"
+                        />
+                        <Button 
+                          variant="outline" 
+                          onClick={handleMakeAdmin}
+                          disabled={isLoading}
+                          className="w-full"
+                        >
+                          {isLoading ? 'Processing...' : 'Assign Admin Role'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
                   
                   <Card>
                     <CardHeader className="pb-2">
