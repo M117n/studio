@@ -72,7 +72,7 @@ export function AddItemRequestComponent({
     defaultValues: {
       name: "",
       subcategory: defaultSubcategory,
-      quantity: 0,
+      quantity: undefined,
       unit: unitOptions.length > 0 ? (unitOptions[0] as Unit) : undefined, // Safer default for unit
     },
   });
@@ -125,7 +125,7 @@ export function AddItemRequestComponent({
       form.reset({
         name: "",
         subcategory: defaultSubcategory,
-        quantity: 0,
+        quantity: undefined,
         unit: unitOptions.length > 0 ? (unitOptions[0] as Unit) : undefined,
       });
       setShowConfirmDialog(false);
@@ -175,7 +175,14 @@ export function AddItemRequestComponent({
                   <FormItem>
                     <FormLabel>Quantity</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" step="any" {...field} />
+                      <Input 
+                        type="text" 
+                        inputMode="decimal" 
+                        pattern="\d*(\.\d+)?" 
+                        placeholder="0" 
+                        {...field} 
+                        value={field.value === undefined ? '' : field.value} // Ensure controlled input
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
