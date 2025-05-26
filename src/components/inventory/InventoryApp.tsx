@@ -356,15 +356,6 @@ export default function InventoryApp() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Current Inventory</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!previousStates.length}
-                onClick={undoLastChange}
-              >
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Undo
-              </Button>
             </CardHeader>
             <CardContent>
               <InventoryList
