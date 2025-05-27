@@ -72,42 +72,67 @@ interface PendingRequestsPanelProps {
 export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
   const [removalRequests, setRemovalRequests] = useState<RemovalRequest[]>([]);
   const [additionRequests, setAdditionRequests] = useState<AdditionRequest[]>([]);
+  console.log("Current additionRequests state (PendingRequestsPanel):", additionRequests); // DEBUG
   const [activeTab, setActiveTab] = useState<'removal' | 'addition'>('removal');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // True by default, indicates overall loading
   const [error, setError] = useState<string | null>(null);
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, loading: authHookLoading } = useAuth(); // Use 'loading' and rename to 'authHookLoading'
 
+  // Effect 1: Check admin status and auth state
   useEffect(() => {
-    // Retry mechanism for admin verification
-    const checkAdminStatus = async () => {
-      try {
-        // Only check admin status if role is not already 'admin'
-        if (isAdmin) {
-          setError(null);
-        } else if (user) {
-          setError("Access Denied: Admin privileges required.");
-        } else {
-          setError("You must be logged in as an admin.");
-        }
-      } catch (err) {
-        console.error("Error verifying admin status:", err);
-        setError("Error verifying admin privileges.");
-      }
-    };
-    
-    checkAdminStatus();
-  }, [isAdmin, user]);
+    if (authHookLoading) { // Use authHookLoading
+      // Auth state is still being determined
+      setIsLoading(true); // Keep main loading indicator active
+      return;
+    }
 
-  // Effect to fetch requests - separate from admin verification
-  useEffect(() => {
-    if (error) {
-      // Don't fetch if we have an error
+    if (!user) {
+      setError("You must be logged in to view requests.");
       setIsLoading(false);
+      setRemovalRequests([]);
+      setAdditionRequests([]);
+      return;
+    }
+
+    if (!isAdmin) {
+      setError("Access Denied: Admin privileges required.");
+      setIsLoading(false);
+      setRemovalRequests([]);
+      setAdditionRequests([]);
+      return;
+    }
+
+    // If user is admin and authenticated, clear any previous errors
+    setError(null); 
+    // setIsLoading(true); // Data fetching useEffect will handle this
+
+  }, [user, isAdmin, authHookLoading]); // Depend on authHookLoading
+
+  // Effect 2: Fetch requests (both removal and addition)
+  useEffect(() => {
+    // Only fetch if authenticated, confirmed as admin, and no errors
+    if (authHookLoading || !isAdmin || error) { // Use authHookLoading
+      // If not loading auth, not admin, or error exists, ensure main loading is off.
+      if (!authHookLoading) { // Use authHookLoading
+        setIsLoading(false);
+      }
+      // Clear data if conditions are not met to prevent showing stale data
+      setRemovalRequests([]); 
+      setAdditionRequests([]);
       return;
     }
     
-    setIsLoading(true);
+    setIsLoading(true); // Start loading before fetching data
     const db = getFirestore(auth.app);
+    
+    let removalFetchAttempted = false;
+    let additionFetchAttempted = false;
+
+    const updateLoadingState = () => {
+      if (removalFetchAttempted && additionFetchAttempted) {
+        setIsLoading(false);
+      }
+    };
     
     // Fetch removal requests
     const removalQuery = query(collection(db, 'removalRequests'), where('status', '==', 'pending'));
@@ -117,7 +142,8 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
         requests.push({ id: doc.id, ...doc.data() } as RemovalRequest);
       });
       setRemovalRequests(requests.sort((a, b) => a.requestTimestamp.toMillis() - b.requestTimestamp.toMillis()));
-      setIsLoading(false);
+      removalFetchAttempted = true;
+      updateLoadingState();
     }, (err) => {
       console.error("Error fetching pending removal requests: ", err);
       toast({
@@ -125,17 +151,26 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
         description: err.message,
         variant: "destructive",
       });
+      removalFetchAttempted = true;
+      updateLoadingState();
     });
     
     // Fetch addition requests
+    console.log("Setting up listener for additionRequests..."); // DEBUG
     const additionQuery = query(collection(db, 'additionRequests'), where('status', '==', 'pending'));
     const unsubscribeAddition = onSnapshot(additionQuery, (querySnapshot) => {
+      console.log("additionRequests snapshot fired."); // DEBUG
+      console.log("Is snapshot empty?", querySnapshot.empty); // DEBUG
+      console.log("Number of docs:", querySnapshot.docs.length); // DEBUG
       const requests: AdditionRequest[] = [];
       querySnapshot.forEach((doc) => {
+        console.log("Processing addition doc:", doc.id, doc.data()); // DEBUG
         requests.push({ id: doc.id, ...doc.data() } as AdditionRequest);
       });
+      console.log("Fetched addition requests array:", requests); // DEBUG
       setAdditionRequests(requests.sort((a, b) => a.requestTimestamp.toMillis() - b.requestTimestamp.toMillis()));
-      setIsLoading(false);
+      additionFetchAttempted = true;
+      updateLoadingState();
     }, (err) => {
       console.error("Error fetching pending addition requests: ", err);
       toast({
@@ -143,13 +178,15 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
         description: err.message,
         variant: "destructive",
       });
+      additionFetchAttempted = true;
+      updateLoadingState();
     });
 
     return () => {
       unsubscribeRemoval();
       unsubscribeAddition();
     };
-  }, [isAdmin]);
+  }, [isAdmin, error, authHookLoading]); // Depend on authHookLoading
 
   const handleApproveRequest = async (request: RemovalRequest) => {
     if (!user?.uid) {
