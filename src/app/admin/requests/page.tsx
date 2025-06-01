@@ -2,46 +2,56 @@
 "use client";
 
 import { AdminNavbar } from '@/components/AdminNavbar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { useEffect, useState } from 'react';
 import {
-  getFirestore,
-  collection,
-  query,
-  where,
-  onSnapshot,
-  Timestamp,
-  doc,
-  writeBatch,
-  serverTimestamp,
-  runTransaction,
-  DocumentReference,
-  DocumentData,
-  addDoc
+  getFirestore, collection, query, where, onSnapshot, doc, runTransaction, serverTimestamp, writeBatch, addDoc, Timestamp, DocumentReference
 } from 'firebase/firestore';
-import { auth } from '@/lib/firebaseClient';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { auth } from '@/lib/firebaseClient'; 
+import { useAuth } from '@/hooks/useAuth'; 
 import { Button } from '@/components/ui/button';
-import { toast } from '@/hooks/use-toast';
-import type { InventoryItem } from '@/types/inventory'; // For inventory item structure
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast"; 
+import { InventoryItem, Category, SubCategory, Unit, isValidCategory, isValidSubCategory, isValidUnit } from '@/types/inventory'; 
 
-// Define a more specific type for the items within a request
+// Define a more specific type for the items within a removal request
 interface RequestedItemDetail {
   itemId: string;
   name: string;
   quantityToRemove: number;
-  unit: string;
-  category?: string | null;
-  // imageUrl?: string | null; // Removed as per task
+  unit: Unit;
+  category: Category | null;
+  subcategory: SubCategory | null;
 }
 
 // Define the structure of a removal request as fetched from Firestore
 export interface RemovalRequest {
-  id: string; // Document ID
+  id: string; 
   userId: string;
   userName: string;
   requestedItems: RequestedItemDetail[];
-  requestTimestamp: Timestamp; // Firestore Timestamp
+  requestTimestamp: Timestamp; 
+  status: 'pending' | 'approved' | 'rejected';
+  adminId?: string;
+  adminName?: string;
+  processedTimestamp?: Timestamp;
+  adminNotes?: string;
+}
+
+// Define the structure of an addition request as fetched from Firestore
+export interface AdditionRequest {
+  id: string; 
+  userId: string;
+  userName: string;
+  requestedItem: {
+    name: string;
+    category: Category;
+    subcategory: SubCategory;
+    quantityToAdd: number;
+    unit: Unit;
+  };
+  requestTimestamp: Timestamp; 
   status: 'pending' | 'approved' | 'rejected';
   adminId?: string;
   adminName?: string;
@@ -58,11 +68,14 @@ interface AdminUserData {
 }
 
 const AdminPanelPage = () => {
+  const { toast } = useToast();
   const [requests, setRequests] = useState<RemovalRequest[]>([]);
+  const [additionRequests, setAdditionRequests] = useState<AdditionRequest[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUserData | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('removal'); 
 
   // Fetch admin user data and then removal requests
   useEffect(() => {
@@ -76,7 +89,7 @@ const AdminPanelPage = () => {
         const userData: AdminUserData = await response.json();
         if (userData.role !== 'admin') {
           setError("Access Denied: You do not have permission to view this page.");
-          setAdminUser(null); // Ensure adminUser is null if not admin
+          setAdminUser(null); 
         } else {
           setAdminUser(userData);
         }
@@ -93,82 +106,122 @@ const AdminPanelPage = () => {
 
   useEffect(() => {
     if (isAuthLoading || !adminUser) {
-      // Don't fetch requests if auth is loading or user is not an admin (or not authenticated)
       if (!isAuthLoading && !adminUser && !error) {
-        // This case means auth check finished, user is not admin, and no specific auth error was set above
-        // setError might have been set to "Access Denied" already by fetchAdminUser
         if (!error) setError("Access Denied: Admin privileges required."); 
-        setIsLoading(false); // Stop main loading indicator
+        setIsLoading(false); 
       }
       return;
     }
 
-    // Admin user is confirmed, proceed to fetch requests
     setIsLoading(true);
     const db = getFirestore(auth.app);
-    const q = query(collection(db, 'removalRequests'), where('status', '==', 'pending'));
+    
+    let removalFetchAttempted = false;
+    let additionFetchAttempted = false;
 
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const requests: RemovalRequest[] = [];
+    const updateLoadingState = () => {
+      if (removalFetchAttempted && additionFetchAttempted) {
+        setIsLoading(false);
+      }
+    };
+
+    const removalQuery = query(collection(db, 'removalRequests'), where('status', '==', 'pending'));
+    const unsubscribeRemoval = onSnapshot(removalQuery, (querySnapshot) => {
+      const fetchedRequests: RemovalRequest[] = [];
       querySnapshot.forEach((doc) => {
-        requests.push({ id: doc.id, ...doc.data() } as RemovalRequest);
+        fetchedRequests.push({ id: doc.id, ...doc.data() } as RemovalRequest);
       });
-      setRequests(requests.sort((a, b) => a.requestTimestamp.toMillis() - b.requestTimestamp.toMillis()));
-      setIsLoading(false);
+      setRequests(fetchedRequests.sort((a, b) => a.requestTimestamp.toMillis() - b.requestTimestamp.toMillis()));
+      removalFetchAttempted = true;
+      updateLoadingState();
     }, (err) => {
-      console.error("Error fetching pending requests: ", err);
-      setError('Failed to load pending requests. Please try again later.');
-      setIsLoading(false);
-      toast({
-        title: "Error Loading Requests",
-        description: err.message,
-        variant: "destructive",
-      });
+      console.error("Error fetching pending removal requests: ", err);
+      toast({ title: "Error Loading Removal Requests", description: err.message, variant: "destructive" });
+      removalFetchAttempted = true;
+      updateLoadingState();
     });
 
-    return () => unsubscribe();
-  }, [adminUser, isAuthLoading, error]); // Added error to dependency array
+    const additionQuery = query(collection(db, 'additionRequests'), where('status', '==', 'pending'));
+    const unsubscribeAddition = onSnapshot(additionQuery, (querySnapshot) => {
+      const fetchedRequests: AdditionRequest[] = [];
+      querySnapshot.forEach((docSnapshot) => {
+        const data = docSnapshot.data();
+        const itemData = data.requestedItem;
+
+        if (!itemData) {
+          console.error(`Addition request ${docSnapshot.id} is missing requestedItem data.`);
+          // Potentially mark this request as erroneous or skip
+          return;
+        }
+
+        // Validate and convert enum string values from Firestore
+        const categoryStr = itemData.category;
+        const subcategoryStr = itemData.subcategory;
+        const unitStr = itemData.unit;
+
+        if (!isValidCategory(categoryStr)) {
+          console.error(`Invalid category '${categoryStr}' in addition request ${docSnapshot.id}.`);
+          toast({ title: "Data Error", description: `Request ${docSnapshot.id} has an invalid category: ${categoryStr}`, variant: "destructive" });
+          return; // Skip this request
+        }
+        if (!isValidSubCategory(subcategoryStr)) {
+          console.error(`Invalid subcategory '${subcategoryStr}' in addition request ${docSnapshot.id}.`);
+          toast({ title: "Data Error", description: `Request ${docSnapshot.id} has an invalid subcategory: ${subcategoryStr}`, variant: "destructive" });
+          return; // Skip this request
+        }
+        if (!isValidUnit(unitStr)) {
+          console.error(`Invalid unit '${unitStr}' in addition request ${docSnapshot.id}.`);
+          toast({ title: "Data Error", description: `Request ${docSnapshot.id} has an invalid unit: ${unitStr}`, variant: "destructive" });
+          return; // Skip this request
+        }
+        
+        // At this point, categoryStr, subcategoryStr, and unitStr are validated enum members
+        fetchedRequests.push({
+          id: docSnapshot.id,
+          userId: data.userId,
+          userName: data.userName,
+          requestTimestamp: data.requestTimestamp as Timestamp,
+          status: data.status as 'pending' | 'approved' | 'rejected',
+          adminId: data.adminId,
+          adminName: data.adminName,
+          processedTimestamp: data.processedTimestamp as Timestamp | undefined,
+          adminNotes: data.adminNotes,
+          requestedItem: {
+            name: itemData.name,
+            category: categoryStr, // Now known to be a valid Category enum member
+            subcategory: subcategoryStr, // Now known to be a valid SubCategory enum member
+            quantityToAdd: itemData.quantityToAdd,
+            unit: unitStr, // Now known to be a valid Unit enum member
+          },
+        });
+      });
+      setAdditionRequests(fetchedRequests.sort((a, b) => a.requestTimestamp.toMillis() - b.requestTimestamp.toMillis()));
+      additionFetchAttempted = true;
+      updateLoadingState();
+    }, (err) => {
+      console.error("Error fetching pending addition requests: ", err);
+      toast({ title: "Error Loading Addition Requests", description: err.message, variant: "destructive" });
+      additionFetchAttempted = true;
+      updateLoadingState();
+    });
+
+    return () => {
+      unsubscribeRemoval();
+      unsubscribeAddition();
+    };
+  }, [isAuthLoading, adminUser, error]);
 
   const handleApproveRequest = async (request: RemovalRequest) => {
     if (!adminUser?.uid || !adminUser?.name) {
-      toast({ title: "Admin Not Authenticated", description: "Cannot process request.", variant: "destructive" });
+      toast({ title: "Error", description: "Admin user data not found. Cannot process request.", variant: "destructive" });
       return;
     }
 
     const db = getFirestore(auth.app);
-    const requestDocRef = doc(db, 'removalRequests', request.id);
 
     try {
       await runTransaction(db, async (transaction) => {
-        // 1. Get the latest request data (optional, but good practice if request could change)
-        const requestSnapshot = await transaction.get(requestDocRef);
-        if (!requestSnapshot.exists()) {
-          throw new Error("Request document not found!");
-        }
-        const currentRequestData = requestSnapshot.data() as Omit<RemovalRequest, 'id'>;
-        if (currentRequestData.status !== 'pending') {
-          throw new Error(`Request is no longer pending (current status: ${currentRequestData.status}).`);
-        }
-
-        // 2. Update inventory items
-        for (const itemToUpdate of request.requestedItems) {
-          const inventoryItemRef = doc(db, 'inventory', itemToUpdate.itemId) as DocumentReference<InventoryItem>; // Cast for type safety
-          const inventoryItemSnap = await transaction.get(inventoryItemRef);
-
-          if (!inventoryItemSnap.exists()) {
-            throw new Error(`Inventory item ${itemToUpdate.name} (ID: ${itemToUpdate.itemId}) not found!`);
-          }
-
-          const currentQuantity = inventoryItemSnap.data()?.quantity || 0;
-          const newQuantity = currentQuantity - itemToUpdate.quantityToRemove;
-
-          if (newQuantity < 0) {
-            throw new Error(`Insufficient stock for ${itemToUpdate.name}. Requested: ${itemToUpdate.quantityToRemove}, Available: ${currentQuantity}.`);
-          }
-          transaction.update(inventoryItemRef, { quantity: newQuantity });
-        }
-
-        // 3. Update the removal request status and admin details
+        const requestDocRef = doc(db, 'removalRequests', request.id);
         transaction.update(requestDocRef, {
           status: 'approved',
           adminId: adminUser.uid,
@@ -176,9 +229,29 @@ const AdminPanelPage = () => {
           processedTimestamp: serverTimestamp(),
         });
 
-        // 4. Log the action (simplified, expand as needed based on logging standards)
-        const actionLogCollection = collection(db, 'actionLogs');
-        transaction.set(doc(actionLogCollection), {
+        for (const item of request.requestedItems) {
+          const inventoryItemRef = doc(db, 'inventory', item.itemId) as DocumentReference<InventoryItem>; 
+          const inventoryItemSnap = await transaction.get(inventoryItemRef);
+
+          if (!inventoryItemSnap.exists()) {
+            throw new Error(`Inventory item with ID ${item.itemId} not found.`);
+          }
+
+          const currentQuantity = inventoryItemSnap.data().quantity;
+          const newQuantity = currentQuantity - item.quantityToRemove;
+
+          if (newQuantity < 0) {
+            throw new Error(`Not enough stock for item ${item.name} (ID: ${item.itemId}). Requested: ${item.quantityToRemove}, Available: ${currentQuantity}`);
+          }
+
+          transaction.update(inventoryItemRef, { 
+            quantity: newQuantity,
+            lastUpdated: serverTimestamp()
+          });
+        }
+
+        const actionLogRef = collection(db, 'actionLogs');
+        await addDoc(actionLogRef, {
           actionType: 'approve_removal_request',
           requestId: request.id,
           userId: request.userId,
@@ -188,27 +261,33 @@ const AdminPanelPage = () => {
           timestamp: serverTimestamp(),
           details: {
             approvedItems: request.requestedItems,
-            message: `Admin ${adminUser.name} approved removal request ${request.id} from user ${request.userName}.`
-          }
+            message: `Admin ${adminUser.name} approved removal request ${request.id} from user ${request.userName}.`,
+          },
         });
 
-        // 5. Create notification for the user
-        const notificationsCollection = collection(db, 'notifications');
-        transaction.set(doc(notificationsCollection), { 
+        const notificationsRef = collection(db, 'notifications');
+        await addDoc(notificationsRef, {
           userId: request.userId,
           type: 'request_approved',
-          message: `Your removal request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItems.length} item(s) has been approved. Inventory updated.`,
+          message: `Your removal request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItems.length} item(s) has been approved.`,
           requestId: request.id,
           timestamp: serverTimestamp(),
           isRead: false,
-          link: `/notifications/${request.id}` // Correct path to the notifications detail page
+          link: `/notifications/${request.id}` 
         });
       });
 
-      toast({ title: 'Request Approved', description: `Request ${request.id} processed, inventory updated, and user notified.` });
-    } catch (error: any) {
-      console.error("Error approving request: ", error);
-      toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
+      toast({
+        title: "Request Approved",
+        description: `Removal request ${request.id} has been approved and inventory updated.`,
+      });
+    } catch (e: any) {
+      console.error("Error approving request: ", e);
+      toast({
+        title: "Error Approving Request",
+        description: e.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -220,54 +299,183 @@ const AdminPanelPage = () => {
 
     const db = getFirestore(auth.app);
     const requestDocRef = doc(db, 'removalRequests', request.id);
+    const batch = writeBatch(db);
+
+    batch.update(requestDocRef, {
+      status: 'rejected',
+      adminId: adminUser.uid,
+      adminName: adminUser.name,
+      processedTimestamp: serverTimestamp(),
+      adminNotes: rejectionNotes || "No specific reason provided."
+    });
+
+    const actionLogRef = doc(collection(db, 'actionLogs'));
+    batch.set(actionLogRef, {
+      actionType: 'reject_removal_request',
+      requestId: request.id,
+      userId: request.userId,
+      userName: request.userName,
+      adminId: adminUser.uid,
+      adminName: adminUser.name,
+      timestamp: serverTimestamp(),
+      details: {
+        rejectedItems: request.requestedItems,
+        reason: rejectionNotes || "No specific reason provided.",
+        message: `Admin ${adminUser.name} rejected removal request ${request.id} from user ${request.userName}.`
+      }
+    });
+
+    const notificationRef = doc(collection(db, 'notifications'));
+    batch.set(notificationRef, { 
+      userId: request.userId,
+      type: 'request_rejected',
+      message: `Your removal request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItems.length} item(s) has been rejected. Notes: ${rejectionNotes || 'N/A'}`, 
+      requestId: request.id,
+      adminNotes: rejectionNotes || "No specific reason provided.",
+      timestamp: serverTimestamp(),
+      isRead: false,
+      link: `/notifications/${request.id}` 
+    });
 
     try {
-      const batch = writeBatch(db);
-
-      // 1. Update the removal request status, admin details, and notes
-      batch.update(requestDocRef, {
-        status: 'rejected',
-        adminId: adminUser.uid,
-        adminName: adminUser.name,
-        processedTimestamp: serverTimestamp(),
-        adminNotes: rejectionNotes || "No specific reason provided."
-      });
-
-      // 2. Log the action
-      const actionLogCollection = collection(db, 'actionLogs');
-      batch.set(doc(actionLogCollection), {
-        actionType: 'reject_removal_request',
-        requestId: request.id,
-        userId: request.userId,
-        userName: request.userName,
-        adminId: adminUser.uid,
-        adminName: adminUser.name,
-        timestamp: serverTimestamp(),
-        details: {
-          rejectedItems: request.requestedItems,
-          reason: rejectionNotes || "No specific reason provided.",
-          message: `Admin ${adminUser.name} rejected removal request ${request.id} from user ${request.userName}.`
-        }
-      });
-
-      // 3. Create notification for the user
-      const notificationsCollection = collection(db, 'notifications');
-      batch.set(doc(notificationsCollection), { 
-        userId: request.userId,
-        type: 'request_rejected',
-        message: `Your removal request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItems.length} item(s) has been rejected. Notes: ${rejectionNotes || 'N/A'}`,
-        requestId: request.id,
-        adminNotes: rejectionNotes || "No specific reason provided.",
-        timestamp: serverTimestamp(),
-        isRead: false,
-        link: `/notifications/${request.id}` // Correct path to the notifications detail page
-      });
-
       await batch.commit();
       toast({ title: 'Request Rejected', description: `Request ${request.id} has been rejected and user notified.` });
     } catch (error: any) {
       console.error("Error rejecting request: ", error);
       toast({ title: "Rejection Error", description: error.message || "Could not reject request.", variant: "destructive" });
+    }
+  };
+
+  const handleApproveAdditionRequest = async (request: AdditionRequest) => {
+    if (!adminUser?.uid || !adminUser?.name) {
+      toast({ title: "Error", description: "Admin user data not found. Cannot process request.", variant: "destructive" });
+      return;
+    }
+
+    const db = getFirestore(auth.app);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const requestRef = doc(db, 'additionRequests', request.id);
+        transaction.update(requestRef, {
+          status: 'approved',
+          adminId: adminUser.uid,
+          adminName: adminUser.name,
+          processedTimestamp: serverTimestamp(),
+        });
+
+        const inventoryCollectionRef = collection(db, 'inventory');
+        // newItemData should now be correctly typed as request.requestedItem fields are validated enums
+        const newItemData: Omit<InventoryItem, 'id'> = {
+          name: request.requestedItem.name,
+          category: request.requestedItem.category, // This is type Category
+          subcategory: request.requestedItem.subcategory, // This is type SubCategory
+          quantity: request.requestedItem.quantityToAdd,
+          unit: request.requestedItem.unit, // This is type Unit
+          lastUpdated: serverTimestamp() as Timestamp, 
+        };
+        transaction.set(doc(inventoryCollectionRef), newItemData); 
+
+        const actionLogRef = collection(db, 'actionLogs');
+        await addDoc(actionLogRef, {
+          actionType: 'approve_addition_request',
+          requestId: request.id,
+          userId: request.userId,
+          userName: request.userName,
+          adminId: adminUser.uid,
+          adminName: adminUser.name,
+          timestamp: serverTimestamp(),
+          details: {
+            approvedItem: request.requestedItem,
+            message: `Approved addition of ${request.requestedItem.quantityToAdd} ${request.requestedItem.unit} of ${request.requestedItem.name}.`,
+          },
+        });
+
+        const notificationsRef = collection(db, 'notifications');
+        await addDoc(notificationsRef, {
+          userId: request.userId,
+          type: 'request_approved', 
+          message: `Your request to add ${request.requestedItem.name} has been approved.`,
+          requestId: request.id,
+          timestamp: serverTimestamp(),
+          isRead: false,
+          link: `/inventory` 
+        });
+      });
+
+      toast({
+        title: "Addition Request Approved",
+        description: `Item ${request.requestedItem.name} has been added to inventory.`,
+      });
+    } catch (e: any) {
+      console.error("Error approving addition request: ", e);
+      toast({
+        title: "Error Approving Request",
+        description: e.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRejectAdditionRequest = async (request: AdditionRequest, rejectionNotes?: string) => {
+    if (!adminUser?.uid || !adminUser?.name) {
+      toast({ title: "Error", description: "Admin user data not found. Cannot process request.", variant: "destructive" });
+      return;
+    }
+
+    const db = getFirestore(auth.app);
+    const requestRef = doc(db, 'additionRequests', request.id);
+    const batch = writeBatch(db);
+
+    batch.update(requestRef, {
+      status: 'rejected',
+      adminId: adminUser.uid,
+      adminName: adminUser.name,
+      processedTimestamp: serverTimestamp(),
+      adminNotes: rejectionNotes || "No specific reason provided."
+    });
+
+    const actionLogRef = doc(collection(db, 'actionLogs'));
+    batch.set(actionLogRef, {
+      actionType: 'reject_addition_request',
+      requestId: request.id,
+      userId: request.userId,
+      userName: request.userName,
+      adminId: adminUser.uid,
+      adminName: adminUser.name,
+      timestamp: serverTimestamp(),
+      details: {
+        rejectedItem: request.requestedItem,
+        reason: rejectionNotes || "No specific reason provided.",
+        message: `Rejected addition of ${request.requestedItem.name}. Reason: ${rejectionNotes || 'N/A'}`,
+      },
+    });
+
+    const notificationRef = doc(collection(db, 'notifications'));
+    batch.set(notificationRef, { 
+      userId: request.userId,
+      type: 'request_rejected', 
+      message: `Your request to add ${request.requestedItem.name} has been rejected. Reason: ${rejectionNotes || 'N/A'}`,
+      requestId: request.id,
+      adminNotes: rejectionNotes,
+      timestamp: serverTimestamp(),
+      isRead: false,
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Addition Request Rejected",
+        description: `The request to add ${request.requestedItem.name} has been rejected.`,
+        variant: "default", 
+      });
+    } catch (e: any) {
+      console.error("Error rejecting addition request: ", e);
+      toast({
+        title: "Error Rejecting Request",
+        description: e.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -280,95 +488,174 @@ const AdminPanelPage = () => {
   }
 
   if (!adminUser) {
-    // This case should ideally be caught by the error state if access is denied
     return <p className="text-center text-lg">Admin access required. Not logged in or not authorized.</p>;
   }
 
-  if (isLoading) {
+  if (isLoading) { 
     return <p className="text-center text-lg">Loading pending requests...</p>;
   }
 
-  if (requests.length === 0) {
-    return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-center text-muted-foreground">No pending removal requests at this time.</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const noRemovalRequests = requests.length === 0;
+  const noAdditionRequests = additionRequests.length === 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminNavbar />
       <div className="container mx-auto p-4 md:p-8">
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle className="text-2xl">Admin Panel: Pending Removal Requests</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">
-            Review and process item removal requests submitted by users.
-          </p>
-        </CardContent>
-      </Card>
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-2xl">Admin Panel: Pending Requests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Review and process item removal and addition requests submitted by users.
+            </p>
+          </CardContent>
+        </Card>
 
-      <div className="space-y-6">
-        {requests.map((request) => (
-          <Card key={request.id} className="shadow-md hover:shadow-lg transition-shadow duration-200">
-            <CardHeader className="pb-4 bg-slate-50 dark:bg-slate-800 rounded-t-lg">
-              <CardTitle className="text-lg">Request ID: <span className="font-mono text-sm bg-slate-200 dark:bg-slate-700 p-1 rounded">{request.id}</span></CardTitle>
-              <div className="text-xs text-muted-foreground space-x-2">
-                <span>User: {request.userName} ({request.userId})</span>
-                <span>|</span>
-                <span>Requested: {new Date(request.requestTimestamp.toDate()).toLocaleString()}</span>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <h4 className="font-semibold mb-2 text-md">Items Requested for Removal:</h4>
-              <ul className="list-disc pl-5 space-y-2 mb-4">
-                {request.requestedItems.map((item, index) => (
-                  <li key={`${item.itemId}-${index}`} className="text-sm">
-                    <span className="font-medium">{item.name}</span> (ID: {item.itemId})
-                    <br />
-                    Quantity: <span className="font-semibold">{item.quantityToRemove} {item.unit}</span>
-                    {item.category && <span className="text-xs"> | Category: {item.category}</span>}
-                    {/* imageUrl and link removed as per task */}
-                  </li>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="removal">Removal Requests ({requests.length})</TabsTrigger>
+            <TabsTrigger value="addition">Addition Requests ({additionRequests.length})</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="removal">
+            {noRemovalRequests ? (
+              <Card className="mt-4">
+                <CardContent className="pt-6">
+                  <p className="text-center text-muted-foreground">No pending removal requests at this time.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6 mt-4">
+                {requests.map((request) => (
+                  <Card key={request.id} className="shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <CardHeader className="pb-4 bg-slate-50 dark:bg-slate-800 rounded-t-lg">
+                      <CardTitle className="text-lg">Request ID: <span className="font-mono text-sm bg-slate-200 dark:bg-slate-700 p-1 rounded">{request.id.substring(0,8)}...</span></CardTitle>
+                      <div className="text-xs text-muted-foreground space-x-2">
+                        <span>User: {request.userName} ({request.userId})</span>
+                        <span>|</span>
+                        <span>Requested: {new Date(request.requestTimestamp.toDate()).toLocaleString()}</span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <h4 className="font-semibold mb-2 text-md">Items Requested for Removal:</h4>
+                      <ul className="list-disc pl-5 space-y-2 mb-4">
+                        {request.requestedItems.map((item, index) => (
+                          <li key={`${item.itemId}-${index}`} className="text-sm">
+                            <span className="font-medium">{item.name}</span> (ID: {item.itemId})
+                            <br />
+                            Quantity: <span className="font-semibold">{item.quantityToRemove} {item.unit}</span>
+                            {item.category && <span className="text-xs"> | Category: {item.category}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                      {request.status === 'rejected' && request.adminNotes && (
+                        <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded-md">
+                          <p className="text-sm font-semibold text-yellow-800">Admin Notes:</p>
+                          <p className="text-sm text-yellow-700">{request.adminNotes}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => {
+                            const notes = prompt("Enter reason for rejection (optional):");
+                            if (notes !== null) { 
+                              handleRejectRequest(request, notes); 
+                            }
+                          }}
+                        >
+                          Reject Request
+                        </Button>
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => handleApproveRequest(request)}
+                        >
+                          Approve Request
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
                 ))}
-              </ul>
-              {request.status === 'rejected' && request.adminNotes && (
-                <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded-md">
-                  <p className="text-sm font-semibold text-yellow-800">Admin Notes:</p>
-                  <p className="text-sm text-yellow-700">{request.adminNotes}</p>
-                </div>
-              )}
-              <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => {
-                    const notes = prompt("Enter reason for rejection (optional):");
-                    // Check if prompt was cancelled (null) or empty string, then proceed
-                    if (notes !== null) { 
-                      handleRejectRequest(request, notes);
-                    }
-                  }}
-                >
-                  Reject Request
-                </Button>
-                <Button 
-                  variant="default" 
-                  size="sm"
-                  onClick={() => handleApproveRequest(request)}
-                >
-                  Approve Request
-                </Button>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="addition">
+            {noAdditionRequests ? (
+              <Card className="mt-4">
+                <CardContent className="pt-6">
+                  <p className="text-center text-muted-foreground">No pending addition requests at this time.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-6 mt-4">
+                {additionRequests.map((request) => (
+                  <Card key={request.id} className="shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <CardHeader className="pb-4 bg-green-50 dark:bg-green-950 rounded-t-lg">
+                      <CardTitle className="text-lg">Addition Request ID: <span className="font-mono text-sm bg-green-200 dark:bg-green-900 p-1 rounded">{request.id.substring(0,8)}...</span></CardTitle>
+                      <div className="text-xs text-muted-foreground space-x-2">
+                        <span>User: {request.userName} ({request.userId})</span>
+                        <span>|</span>
+                        <span>Requested: {new Date(request.requestTimestamp.toDate()).toLocaleString()}</span>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      <h4 className="font-semibold mb-2 text-md">Item Requested for Addition:</h4>
+                      <div className="bg-slate-50 p-3 rounded-md border">
+                        <p className="font-medium text-md">{request.requestedItem.name}</p>
+                        <div className="grid grid-cols-2 gap-1 mt-1 text-sm">
+                          <div>
+                            <span className="text-muted-foreground">Quantity: </span>
+                            <span className="font-semibold">{request.requestedItem.quantityToAdd} {request.requestedItem.unit}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Category: </span>
+                            <span>{request.requestedItem.category}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Subcategory: </span>
+                            <span>{request.requestedItem.subcategory}</span>
+                          </div>
+                        </div>
+                      </div>
+                      {request.status === 'rejected' && request.adminNotes && (
+                        <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded-md">
+                          <p className="text-sm font-semibold text-yellow-800">Admin Notes:</p>
+                          <p className="text-sm text-yellow-700">{request.adminNotes}</p>
+                        </div>
+                      )}
+                      <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => {
+                            const notes = prompt("Enter reason for rejection (optional):");
+                            if (notes !== null) { 
+                              handleRejectAdditionRequest(request, notes);
+                            }
+                          }}
+                        >
+                          Reject Addition
+                        </Button>
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => handleApproveAdditionRequest(request)}
+                        >
+                          Approve Addition
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

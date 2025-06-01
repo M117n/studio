@@ -9,7 +9,7 @@ import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
 import { SubtractItemsComponent } from "@/components/inventory/SubtractItemsComponent";
-import type { InventoryItem, Unit, SubCategory, Category } from "@/types/inventory";
+import { InventoryItem, Unit, SubCategory, Category } from "@/types/inventory";
 import { UNIT_OPTIONS, SUBCATEGORY_OPTIONS, getMainCategory } from "@/types/inventory";
 import { convertUnits } from "@/lib/unitConversion";
 
@@ -179,7 +179,7 @@ export default function InventoryApp() {
       ]);
     } else {
       // Ensure category is correctly set based on subcategory
-      const ensuredCategory = item.subcategory ? getMainCategory(item.subcategory) : (item.category || 'other');
+      const ensuredCategory: Category = item.subcategory ? getMainCategory(item.subcategory) : (item.category ?? Category.OTHER);
       
       // Add the item with the guaranteed category and quantity
       addItemDb({ 
@@ -272,7 +272,7 @@ export default function InventoryApp() {
   return (
     <div className={`container mx-auto p-4 space-y-4 ${darkMode ? "dark" : ""}`}>
       {/* Top bar ---------------------------------------------------- */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-end gap-3 shrink-0"> {/* Admin and Settings container */}
         <h1 className="text-2xl font-bold mr-4">Shawinv</h1>
         <Input
           ref={searchInputRef}
@@ -294,7 +294,6 @@ export default function InventoryApp() {
             Regular User
           </span>
         )}
-
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="ml-auto">
@@ -352,7 +351,7 @@ export default function InventoryApp() {
         </TabsList>
 
         {/* Inventory ------------------------------------------------ */}
-        <TabsContent value="inventory">
+        <TabsContent value="inventory" className="mt-12">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Current Inventory</CardTitle>
@@ -374,7 +373,7 @@ export default function InventoryApp() {
         </TabsContent>
 
         {/* Add / Subtract ------------------------------------------ */}
-        <TabsContent value="add">
+        <TabsContent value="add" className="mt-12">
           <AddItemRequestComponent
             unitOptions={UNIT_OPTIONS}
             subcategoryOptions={SUBCATEGORY_OPTIONS}
@@ -385,7 +384,7 @@ export default function InventoryApp() {
         </TabsContent>
 
         {/* Change log ---------------------------------------------- */}
-        <TabsContent value="changelog">
+        <TabsContent value="changelog" className="mt-12">
           <Card>
             <CardHeader>
               <CardTitle>Change Log</CardTitle>
@@ -423,7 +422,7 @@ export default function InventoryApp() {
         </TabsContent>
 
         {/* CSV ------------------------------------------------------ */}
-        <TabsContent value="importexport">
+        <TabsContent value="importexport" className="mt-12">
           <Card>
             <CardHeader>
               <CardTitle>CSV Import / Export</CardTitle>
@@ -442,7 +441,7 @@ export default function InventoryApp() {
         </TabsContent>
 
         {/* Image ---------------------------------------------------- */}
-        <TabsContent value="image">
+        <TabsContent value="image" className="mt-12">
           <Card>
             <CardHeader>
               <CardTitle>Image ➜ Inventory</CardTitle>
@@ -457,7 +456,7 @@ export default function InventoryApp() {
         </TabsContent>
 
         {/* Subtract Items Tab --------------------------------------- */}
-        <TabsContent value="subtractItems">
+        <TabsContent value="subtractItems" className="mt-12">
           <SubtractItemsComponent 
             inventory={inventory} 
             userId={userId} // string | undefined

@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { InventoryItemData, Unit, SubCategory } from "@/types/inventory";
+import type { InventoryItemData, AppSpecificUnit, SubCategory } from "@/types/inventory";
 import { getMainCategory } from "@/types/inventory";
 import { on } from "events";
 
 interface InventoryFormProps {
     onAddItem: (item: InventoryItemData) => void;
-    unitOptions: readonly Unit[];
+    unitOptions: readonly AppSpecificUnit[];
     subcategoryOptions: readonly SubCategory[];
     defaultSubcategory: SubCategory;
 }
@@ -25,7 +25,7 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
 }) => {
     const [name, setName] = useState("");
     const [quantity, setQuantity] = useState<number | "">("");
-    const [unit, setUnit] = useState<Unit>(unitOptions[0]);
+    const [unit, setUnit] = useState<AppSpecificUnit>(unitOptions[0]);
     const [subcategory, setSubcategory] = useState<SubCategory>(defaultSubcategory);
 
     const handleSubmit = (event: React.FormEvent) => {
@@ -85,7 +85,7 @@ export const InventoryForm: React.FC<InventoryFormProps> = ({
             </div>
             <div>
                 <Label htmlFor="unit">Unit</Label>
-                <Select onValueChange={(v) => setUnit(v as Unit)} defaultValue={unitOptions[0]}>
+                <Select onValueChange={(v) => setUnit(v as AppSpecificUnit)} defaultValue={unitOptions[0]}>
                     <SelectTrigger className="w-[180px]">
                         <SelectValue placeholder="Select a unit" />
                     </SelectTrigger>

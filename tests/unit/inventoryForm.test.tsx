@@ -12,7 +12,7 @@ describe('InventoryForm', () => {
         onAddItem={onAddItem}
         unitOptions={UNIT_OPTIONS}
         subcategoryOptions={SUBCATEGORY_OPTIONS}
-        defaultSubcategory={defaultSubcategory}
+        defaultSubcategory={defaultSubcategory as SubCategory}
       />
     );
 

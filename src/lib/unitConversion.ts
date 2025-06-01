@@ -1,106 +1,106 @@
-import type { Unit } from '@/types/inventory';
+import { AppSpecificUnit } from '@/types/inventory';
 
 // Units that intentionally have no conversion factors
-export const NON_CONVERTIBLE_UNITS: readonly Unit[] = [
-  "case", "bag", "bottle", "can", "piece",
+export const NON_CONVERTIBLE_UNITS: readonly AppSpecificUnit[] = [
+  AppSpecificUnit.CASE, AppSpecificUnit.BAG, AppSpecificUnit.BOTTLE, AppSpecificUnit.CAN, AppSpecificUnit.PIECE,
 ] as const;
 
 // Conversion factors between units (US customary units only)
-export const factors: Partial<Record<Unit, Partial<Record<Unit, number>>>> = {
+export const factors: Partial<Record<AppSpecificUnit, Partial<Record<AppSpecificUnit, number>>>> = {
   // Weight conversions
-  kg: { g: 1000, lb: 2.20462, oz: 35.274 },
-  g: { kg: 0.001, lb: 0.00220462, oz: 0.035274 },
-  lb: { kg: 0.453592, g: 453.592, oz: 16 },
-  oz: { kg: 0.0283495, g: 28.3495, lb: 0.0625 },
+  [AppSpecificUnit.KG]: { [AppSpecificUnit.G]: 1000, [AppSpecificUnit.LB]: 2.20462, [AppSpecificUnit.OZ]: 35.274 },
+  [AppSpecificUnit.G]: { [AppSpecificUnit.KG]: 0.001, [AppSpecificUnit.LB]: 0.00220462, [AppSpecificUnit.OZ]: 0.035274 },
+  [AppSpecificUnit.LB]: { [AppSpecificUnit.KG]: 0.453592, [AppSpecificUnit.G]: 453.592, [AppSpecificUnit.OZ]: 16 },
+  [AppSpecificUnit.OZ]: { [AppSpecificUnit.KG]: 0.0283495, [AppSpecificUnit.G]: 28.3495, [AppSpecificUnit.LB]: 0.0625 },
   
   // Volume conversions (US Customary)
-  L: {
-    mL: 1000,
-    us_gallon: 0.264172,
-    us_quart: 1.05669,
-    us_pint: 2.11338,
-    us_fluid_oz: 33.814
+  [AppSpecificUnit.L]: {
+    [AppSpecificUnit.ML]: 1000,
+    [AppSpecificUnit.US_GALLON]: 0.264172,
+    [AppSpecificUnit.US_QUART]: 1.05669,
+    [AppSpecificUnit.US_PINT]: 2.11338,
+    [AppSpecificUnit.US_FLUID_OZ]: 33.814
   },
   
-  mL: {
-    L: 0.001,
-    us_gallon: 0.000264172,
-    us_quart: 0.00105669,
-    us_pint: 0.00211338,
-    us_fluid_oz: 0.033814
+  [AppSpecificUnit.ML]: {
+    [AppSpecificUnit.L]: 0.001,
+    [AppSpecificUnit.US_GALLON]: 0.000264172,
+    [AppSpecificUnit.US_QUART]: 0.00105669,
+    [AppSpecificUnit.US_PINT]: 0.00211338,
+    [AppSpecificUnit.US_FLUID_OZ]: 0.033814
   },
   
-  us_gallon: { 
-    L: 3.78541, 
-    mL: 3785.41, 
-    us_quart: 4, 
-    us_pint: 8, 
-    us_fluid_oz: 128 
+  [AppSpecificUnit.US_GALLON]: { 
+    [AppSpecificUnit.L]: 3.78541, 
+    [AppSpecificUnit.ML]: 3785.41, 
+    [AppSpecificUnit.US_QUART]: 4, 
+    [AppSpecificUnit.US_PINT]: 8, 
+    [AppSpecificUnit.US_FLUID_OZ]: 128 
   },
   
-  us_quart: { 
-    L: 0.946353, 
-    mL: 946.353, 
-    us_gallon: 0.25, 
-    us_pint: 2, 
-    us_fluid_oz: 32 
+  [AppSpecificUnit.US_QUART]: { 
+    [AppSpecificUnit.L]: 0.946353, 
+    [AppSpecificUnit.ML]: 946.353, 
+    [AppSpecificUnit.US_GALLON]: 0.25, 
+    [AppSpecificUnit.US_PINT]: 2, 
+    [AppSpecificUnit.US_FLUID_OZ]: 32 
   },
   
-  us_pint: { 
-    L: 0.473176, 
-    mL: 473.176, 
-    us_gallon: 0.125, 
-    us_quart: 0.5, 
-    us_fluid_oz: 16 
+  [AppSpecificUnit.US_PINT]: { 
+    [AppSpecificUnit.L]: 0.473176, 
+    [AppSpecificUnit.ML]: 473.176, 
+    [AppSpecificUnit.US_GALLON]: 0.125, 
+    [AppSpecificUnit.US_QUART]: 0.5, 
+    [AppSpecificUnit.US_FLUID_OZ]: 16 
   },
   
-  us_fluid_oz: { 
-    L: 0.0295735, 
-    mL: 29.5735, 
-    us_gallon: 0.0078125, 
-    us_quart: 0.03125, 
-    us_pint: 0.0625,
-    imp_fluid_oz: 1.04084
+  [AppSpecificUnit.US_FLUID_OZ]: { 
+    [AppSpecificUnit.L]: 0.0295735, 
+    [AppSpecificUnit.ML]: 29.5735, 
+    [AppSpecificUnit.US_GALLON]: 0.0078125, 
+    [AppSpecificUnit.US_QUART]: 0.03125, 
+    [AppSpecificUnit.US_PINT]: 0.0625,
+    [AppSpecificUnit.IMP_FLUID_OZ]: 1.04084
   },
 
   // Imperial volume units
-  imp_gallon: { 
-    L: 4.54609, 
-    mL: 4546.09, 
-    imp_quart: 4, 
-    imp_pint: 8, 
-    imp_fluid_oz: 160,
-    us_gallon: 1.20095,
-    us_quart: 4.8038,
-    us_pint: 9.6076,
-    us_fluid_oz: 153.722
+  [AppSpecificUnit.IMP_GALLON]: { 
+    [AppSpecificUnit.L]: 4.54609, 
+    [AppSpecificUnit.ML]: 4546.09, 
+    [AppSpecificUnit.IMP_QUART]: 4, 
+    [AppSpecificUnit.IMP_PINT]: 8, 
+    [AppSpecificUnit.IMP_FLUID_OZ]: 160,
+    [AppSpecificUnit.US_GALLON]: 1.20095,
+    [AppSpecificUnit.US_QUART]: 4.8038,
+    [AppSpecificUnit.US_PINT]: 9.6076,
+    [AppSpecificUnit.US_FLUID_OZ]: 153.722
   },
-  imp_quart: { 
-    L: 1.13652, 
-    mL: 1136.52, 
-    imp_gallon: 0.25, 
-    imp_pint: 2, 
-    imp_fluid_oz: 40,
-    us_quart: 1.20095,
-    us_pint: 2.4019,
-    us_fluid_oz: 38.4304
+  [AppSpecificUnit.IMP_QUART]: { 
+    [AppSpecificUnit.L]: 1.13652, 
+    [AppSpecificUnit.ML]: 1136.52, 
+    [AppSpecificUnit.IMP_GALLON]: 0.25, 
+    [AppSpecificUnit.IMP_PINT]: 2, 
+    [AppSpecificUnit.IMP_FLUID_OZ]: 40,
+    [AppSpecificUnit.US_QUART]: 1.20095,
+    [AppSpecificUnit.US_PINT]: 2.4019,
+    [AppSpecificUnit.US_FLUID_OZ]: 38.4304
   },
-  imp_pint: { 
-    L: 0.568261, 
-    mL: 568.261, 
-    imp_gallon: 0.125, 
-    imp_quart: 0.5, 
-    imp_fluid_oz: 20,
-    us_pint: 1.20095,
-    us_fluid_oz: 19.2152
+  [AppSpecificUnit.IMP_PINT]: { 
+    [AppSpecificUnit.L]: 0.568261, 
+    [AppSpecificUnit.ML]: 568.261, 
+    [AppSpecificUnit.IMP_GALLON]: 0.125, 
+    [AppSpecificUnit.IMP_QUART]: 0.5, 
+    [AppSpecificUnit.IMP_FLUID_OZ]: 20,
+    [AppSpecificUnit.US_PINT]: 1.20095,
+    [AppSpecificUnit.US_FLUID_OZ]: 19.2152
   },
-  imp_fluid_oz: { 
-    L: 0.0284131, 
-    mL: 28.4131, 
-    imp_gallon: 0.00625, 
-    imp_quart: 0.025, 
-    imp_pint: 0.05,
-    us_fluid_oz: 0.96076
+  [AppSpecificUnit.IMP_FLUID_OZ]: { 
+    [AppSpecificUnit.L]: 0.0284131, 
+    [AppSpecificUnit.ML]: 28.4131, 
+    [AppSpecificUnit.IMP_GALLON]: 0.00625, 
+    [AppSpecificUnit.IMP_QUART]: 0.025, 
+    [AppSpecificUnit.IMP_PINT]: 0.05,
+    [AppSpecificUnit.US_FLUID_OZ]: 0.96076
   },
 };
 
@@ -108,7 +108,7 @@ export const factors: Partial<Record<Unit, Partial<Record<Unit, number>>>> = {
  * Convert a value from one unit to another.
  * Returns the converted value, or null if conversion is not available.
  */
-export function convertUnits(value: number, fromUnit: Unit, toUnit: Unit): number | null {
+export function convertUnits(value: number, fromUnit: AppSpecificUnit, toUnit: AppSpecificUnit): number | null {
   if (fromUnit === toUnit) return value;
   // Hard stop for the five non‑convertible units
   if (

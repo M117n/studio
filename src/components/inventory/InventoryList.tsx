@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { getMainCategory } from "@/types/inventory";
-import type {
-  InventoryItem,
-  Category,
-  Unit,
-  SubCategory,
+import { 
+  getMainCategory, 
+  Category, 
+  SubCategory, 
+  AppSpecificUnit, 
+  InventoryItem 
 } from "@/types/inventory";
 import {
   Table,
@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
   AccordionContent,
@@ -30,11 +30,11 @@ interface InventoryListProps {
   inventory: InventoryItem[];
   onDeleteItem: (id: string) => void;
   onEditItem: (id: string, updatedItem: Omit<InventoryItem, "id">) => void;
-  defaultUnit: Unit;
-  convertUnits: (value: number, fromUnit: Unit, toUnit: Unit) => number | null;
+  defaultUnit: AppSpecificUnit;
+  convertUnits: (value: number, fromUnit: AppSpecificUnit, toUnit: AppSpecificUnit) => number | null;
   searchQuery: string;
   subcategoryOptions: readonly SubCategory[];
-  unitOptions: readonly Unit[];
+  unitOptions: readonly AppSpecificUnit[];
   isAdmin: boolean;
 }
 
@@ -49,10 +49,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   unitOptions,
   isAdmin,
 }) => {
+  const { toast } = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editedName, setEditedName] = useState("");
   const [editedQuantity, setEditedQuantity] = useState<number | "">("");
-  const [editedUnit, setEditedUnit] = useState<Unit | undefined>(
+  const [editedUnit, setEditedUnit] = useState<AppSpecificUnit | undefined>(
     unitOptions.length > 0 ? unitOptions[0] : undefined
   );
   const [editedSubcategory, setEditedSubcategory] = useState<
@@ -103,9 +104,9 @@ export const InventoryList: React.FC<InventoryListProps> = ({
     onEditItem(editingId, {
       name: editedName,
       quantity: finalQuantity,
-      unit: editedUnit,
-      subcategory: editedSubcategory,
-      category: editedSubcategory ? getMainCategory(editedSubcategory) : "other",
+      unit: editedUnit as AppSpecificUnit,
+      subcategory: editedSubcategory as SubCategory,
+      category: editedSubcategory ? getMainCategory(editedSubcategory as SubCategory) : Category.OTHER,
     });
     setEditingId(null);
     toast({
@@ -119,7 +120,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   // Group items by main category
   const groupedInventory: Record<string, InventoryItem[]> = {};
   for (const item of inventory) {
-    const mainCategory = item.category || "other";
+    const mainCategory = item.category || Category.OTHER;
     if (!groupedInventory[mainCategory]) groupedInventory[mainCategory] = [];
     groupedInventory[mainCategory].push(item);
   }
@@ -128,19 +129,25 @@ export const InventoryList: React.FC<InventoryListProps> = ({
   );
 
   // Map subcategories → main category
-  const subcategories = subcategoryOptions.reduce<
+  const subcategories = Object.values(SubCategory).reduce<
     { [key in Category]: SubCategory[] }
   >(
-    (acc, subcategory) => {
-      const category = getMainCategory(subcategory);
-      if (!acc[category]) acc[category] = [];
-      acc[category].push(subcategory);
+    (acc, subcategoryValue) => { 
+      const category = getMainCategory(subcategoryValue);
+      if (!acc[category]) acc[category] = []; 
+      acc[category].push(subcategoryValue);
       return acc;
     },
-    { cooler: [], freezer: [], dry: [], canned: [], other: [] }
+    { 
+      [Category.COOLER]: [], 
+      [Category.FREEZER]: [], 
+      [Category.DRY]: [], 
+      [Category.CANNED]: [], 
+      [Category.OTHER]: [] 
+    } as { [key in Category]: SubCategory[] }
   );
 
-  const categoryDisplayNames: Record<Category | SubCategory, string> = {
+  const categoryDisplayNames: Record<string, string> = { 
     cooler: "Cooler",
     freezer: "Freezer",
     dry: "Dry",
@@ -166,14 +173,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({
 
   const renderQuantity = (
     quantity: number,
-    unit: Unit,
+    unit: AppSpecificUnit,
     convertedQuantity: number | null
   ) =>
     convertedQuantity !== null && typeof convertedQuantity === "number"
       ? convertedQuantity.toFixed(2)
       : quantity;
 
-  const renderUnit = (unit: Unit, convertedQuantity: number | null) =>
+  const renderUnit = (unit: AppSpecificUnit, convertedQuantity: number | null) =>
     convertedQuantity !== null ? (
       defaultUnit
     ) : (
@@ -244,7 +251,6 @@ export const InventoryList: React.FC<InventoryListProps> = ({
 
             return (
               <AccordionItem key={mainCategory} value={mainCategory}>
-                {/* ⬇️  ⬇️  Fix: remove unnecessary `as SubCategory` assertion */}
                 <AccordionTrigger>{displayName(mainCategory as Category)}</AccordionTrigger>
                 <AccordionContent>
                   {hasSubcategories ? (

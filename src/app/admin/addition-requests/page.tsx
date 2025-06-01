@@ -30,14 +30,14 @@ interface AdditionRequest {
 }
 
 const AdminAdditionRequestsPage = () => {
-  const { user, role } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [requests, setRequests] = useState<AdditionRequest[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState<Record<string, boolean>>({}); // Track processing state for each request
 
   const fetchAdditionRequests = useCallback(async () => {
-    if (role !== 'admin') {
+    if (!isAdmin) {
       setError("Access denied. You must be an admin to view this page.");
       setLoading(false);
       return;
@@ -59,7 +59,7 @@ const AdminAdditionRequestsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [role]);
+  }, [isAdmin]);
 
   useEffect(() => {
     if (user) { // Ensure user is loaded before checking role
@@ -125,7 +125,7 @@ const AdminAdditionRequestsPage = () => {
 
   if (loading && !requests.length) return <div className={styles.loading}>Loading requests...</div>;
   if (error) return <div className={styles.error}>{error}</div>;
-  if (role !== 'admin' && !loading) return <div className={styles.error}>Access Denied: You are not authorized to view this page.</div>;
+  if (!isAdmin && !loading) return <div className={styles.error}>Access Denied: You are not authorized to view this page.</div>;
   if (!requests.length && !loading) return <div className={styles.noRequests}>No pending addition requests found.</div>;
 
   return (
