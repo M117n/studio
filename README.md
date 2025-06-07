@@ -1,4 +1,4 @@
-# Sawhinv
+# Shawinv
 
 StockWatch AI is a full-stack inventory management application built with Next.js 13 and React 18. It offers:
   - Offline-first support with localStorage sync queue
