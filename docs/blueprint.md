@@ -23,8 +23,8 @@
    - Adds extracted items under the default category.
 
  ## Persistence
- - All state (inventory list, change log, default unit/category) is persisted to localStorage.
- - Client-only React hooks; no external database or backend required.
+ - All state (inventory list, change log, default unit/category) is persisted to localStorage and synchronized with Firebase Firestore.
+ - Firestore acts as the backend to allow cross-device access while React hooks manage local state.
 
  ## Tech Stack
  - Next.js (App Router) & React 18 with TypeScript.
