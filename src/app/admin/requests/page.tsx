@@ -41,17 +41,24 @@ export interface RemovalRequest {
 
 // Define the structure of an addition request as fetched from Firestore
 export interface AdditionRequest {
-  id: string; 
+  id: string;
   userId: string;
   userName: string;
-  requestedItem: {
+  requestedItems?: {
+    name: string;
+    category: Category;
+    subcategory: SubCategory;
+    quantityToAdd: number;
+    unit: Unit;
+  }[];
+  requestedItem?: {
     name: string;
     category: Category;
     subcategory: SubCategory;
     quantityToAdd: number;
     unit: Unit;
   };
-  requestTimestamp: Timestamp; 
+  requestTimestamp: Timestamp;
   status: 'pending' | 'approved' | 'rejected';
   adminId?: string;
   adminName?: string;
@@ -146,54 +153,72 @@ const AdminPanelPage = () => {
       const fetchedRequests: AdditionRequest[] = [];
       querySnapshot.forEach((docSnapshot) => {
         const data = docSnapshot.data();
-        const itemData = data.requestedItem;
 
-        if (!itemData) {
-          console.error(`Addition request ${docSnapshot.id} is missing requestedItem data.`);
-          // Potentially mark this request as erroneous or skip
-          return;
-        }
+        if (Array.isArray(data.requestedItems)) {
+          const validatedItems = [] as AdditionRequest["requestedItems"];
+          for (const itemData of data.requestedItems) {
+            const categoryStr = itemData.category;
+            const subcategoryStr = itemData.subcategory;
+            const unitStr = itemData.unit;
 
-        // Validate and convert enum string values from Firestore
-        const categoryStr = itemData.category;
-        const subcategoryStr = itemData.subcategory;
-        const unitStr = itemData.unit;
+            if (!isValidCategory(categoryStr) || !isValidSubCategory(subcategoryStr) || !isValidUnit(unitStr)) {
+              console.error(`Invalid item data in addition request ${docSnapshot.id}.`);
+              toast({ title: "Data Error", description: `Request ${docSnapshot.id} has invalid item data`, variant: "destructive" });
+              return;
+            }
+            validatedItems.push({
+              name: itemData.name,
+              category: categoryStr,
+              subcategory: subcategoryStr,
+              quantityToAdd: itemData.quantityToAdd,
+              unit: unitStr,
+            });
+          }
+          fetchedRequests.push({
+            id: docSnapshot.id,
+            userId: data.userId,
+            userName: data.userName,
+            requestTimestamp: data.requestTimestamp as Timestamp,
+            status: data.status as 'pending' | 'approved' | 'rejected',
+            adminId: data.adminId,
+            adminName: data.adminName,
+            processedTimestamp: data.processedTimestamp as Timestamp | undefined,
+            adminNotes: data.adminNotes,
+            requestedItems: validatedItems,
+          });
+        } else if (data.requestedItem) {
+          const itemData = data.requestedItem;
+          const categoryStr = itemData.category;
+          const subcategoryStr = itemData.subcategory;
+          const unitStr = itemData.unit;
 
-        if (!isValidCategory(categoryStr)) {
-          console.error(`Invalid category '${categoryStr}' in addition request ${docSnapshot.id}.`);
-          toast({ title: "Data Error", description: `Request ${docSnapshot.id} has an invalid category: ${categoryStr}`, variant: "destructive" });
-          return; // Skip this request
+          if (!isValidCategory(categoryStr) || !isValidSubCategory(subcategoryStr) || !isValidUnit(unitStr)) {
+            console.error(`Invalid item data in addition request ${docSnapshot.id}.`);
+            toast({ title: "Data Error", description: `Request ${docSnapshot.id} has invalid item data`, variant: "destructive" });
+            return;
+          }
+
+          fetchedRequests.push({
+            id: docSnapshot.id,
+            userId: data.userId,
+            userName: data.userName,
+            requestTimestamp: data.requestTimestamp as Timestamp,
+            status: data.status as 'pending' | 'approved' | 'rejected',
+            adminId: data.adminId,
+            adminName: data.adminName,
+            processedTimestamp: data.processedTimestamp as Timestamp | undefined,
+            adminNotes: data.adminNotes,
+            requestedItem: {
+              name: itemData.name,
+              category: categoryStr,
+              subcategory: subcategoryStr,
+              quantityToAdd: itemData.quantityToAdd,
+              unit: unitStr,
+            },
+          });
+        } else {
+          console.error(`Addition request ${docSnapshot.id} missing item data.`);
         }
-        if (!isValidSubCategory(subcategoryStr)) {
-          console.error(`Invalid subcategory '${subcategoryStr}' in addition request ${docSnapshot.id}.`);
-          toast({ title: "Data Error", description: `Request ${docSnapshot.id} has an invalid subcategory: ${subcategoryStr}`, variant: "destructive" });
-          return; // Skip this request
-        }
-        if (!isValidUnit(unitStr)) {
-          console.error(`Invalid unit '${unitStr}' in addition request ${docSnapshot.id}.`);
-          toast({ title: "Data Error", description: `Request ${docSnapshot.id} has an invalid unit: ${unitStr}`, variant: "destructive" });
-          return; // Skip this request
-        }
-        
-        // At this point, categoryStr, subcategoryStr, and unitStr are validated enum members
-        fetchedRequests.push({
-          id: docSnapshot.id,
-          userId: data.userId,
-          userName: data.userName,
-          requestTimestamp: data.requestTimestamp as Timestamp,
-          status: data.status as 'pending' | 'approved' | 'rejected',
-          adminId: data.adminId,
-          adminName: data.adminName,
-          processedTimestamp: data.processedTimestamp as Timestamp | undefined,
-          adminNotes: data.adminNotes,
-          requestedItem: {
-            name: itemData.name,
-            category: categoryStr, // Now known to be a valid Category enum member
-            subcategory: subcategoryStr, // Now known to be a valid SubCategory enum member
-            quantityToAdd: itemData.quantityToAdd,
-            unit: unitStr, // Now known to be a valid Unit enum member
-          },
-        });
       });
       setAdditionRequests(fetchedRequests.sort((a, b) => a.requestTimestamp.toMillis() - b.requestTimestamp.toMillis()));
       additionFetchAttempted = true;
@@ -365,16 +390,18 @@ const AdminPanelPage = () => {
         });
 
         const inventoryCollectionRef = collection(db, 'inventory');
-        // newItemData should now be correctly typed as request.requestedItem fields are validated enums
-        const newItemData: Omit<InventoryItem, 'id'> = {
-          name: request.requestedItem.name,
-          category: request.requestedItem.category, // This is type Category
-          subcategory: request.requestedItem.subcategory, // This is type SubCategory
-          quantity: request.requestedItem.quantityToAdd,
-          unit: request.requestedItem.unit, // This is type Unit
-          lastUpdated: serverTimestamp() as Timestamp, 
-        };
-        transaction.set(doc(inventoryCollectionRef), newItemData); 
+        const itemsToAdd = request.requestedItems ?? [request.requestedItem];
+        itemsToAdd.forEach(item => {
+          const newItemData: Omit<InventoryItem, 'id'> = {
+            name: item!.name,
+            category: item!.category,
+            subcategory: item!.subcategory,
+            quantity: item!.quantityToAdd,
+            unit: item!.unit,
+            lastUpdated: serverTimestamp() as Timestamp,
+          };
+          transaction.set(doc(inventoryCollectionRef), newItemData);
+        });
 
         const actionLogRef = collection(db, 'actionLogs');
         await addDoc(actionLogRef, {
@@ -386,26 +413,26 @@ const AdminPanelPage = () => {
           adminName: adminUser.name,
           timestamp: serverTimestamp(),
           details: {
-            approvedItem: request.requestedItem,
-            message: `Approved addition of ${request.requestedItem.quantityToAdd} ${request.requestedItem.unit} of ${request.requestedItem.name}.`,
+            approvedItems: itemsToAdd,
+            message: `Approved addition request ${request.id}.`,
           },
         });
 
         const notificationsRef = collection(db, 'notifications');
         await addDoc(notificationsRef, {
           userId: request.userId,
-          type: 'request_approved', 
-          message: `Your request to add ${request.requestedItem.name} has been approved.`,
+          type: 'request_approved',
+          message: `Your addition request ${request.id.substring(0,6)}... has been approved.`,
           requestId: request.id,
           timestamp: serverTimestamp(),
           isRead: false,
-          link: `/inventory` 
+          link: `/inventory`
         });
       });
 
       toast({
         title: "Addition Request Approved",
-        description: `Item ${request.requestedItem.name} has been added to inventory.`,
+        description: `Addition request ${request.id} has been approved and items added to inventory.`,
       });
     } catch (e: any) {
       console.error("Error approving addition request: ", e);
@@ -445,17 +472,17 @@ const AdminPanelPage = () => {
       adminName: adminUser.name,
       timestamp: serverTimestamp(),
       details: {
-        rejectedItem: request.requestedItem,
+        rejectedItems: request.requestedItems ?? [request.requestedItem],
         reason: rejectionNotes || "No specific reason provided.",
-        message: `Rejected addition of ${request.requestedItem.name}. Reason: ${rejectionNotes || 'N/A'}`,
+        message: `Rejected addition request ${request.id}.`,
       },
     });
 
     const notificationRef = doc(collection(db, 'notifications'));
-    batch.set(notificationRef, { 
+    batch.set(notificationRef, {
       userId: request.userId,
-      type: 'request_rejected', 
-      message: `Your request to add ${request.requestedItem.name} has been rejected. Reason: ${rejectionNotes || 'N/A'}`,
+      type: 'request_rejected',
+      message: `Your addition request ${request.id.substring(0,6)}... was rejected.`,
       requestId: request.id,
       adminNotes: rejectionNotes,
       timestamp: serverTimestamp(),
@@ -466,8 +493,8 @@ const AdminPanelPage = () => {
       await batch.commit();
       toast({
         title: "Addition Request Rejected",
-        description: `The request to add ${request.requestedItem.name} has been rejected.`,
-        variant: "default", 
+        description: `Addition request ${request.id} has been rejected.`,
+        variant: "default",
       });
     } catch (e: any) {
       console.error("Error rejecting addition request: ", e);
@@ -604,24 +631,53 @@ const AdminPanelPage = () => {
                       </div>
                     </CardHeader>
                     <CardContent className="pt-4">
-                      <h4 className="font-semibold mb-2 text-md">Item Requested for Addition:</h4>
-                      <div className="bg-slate-50 p-3 rounded-md border">
-                        <p className="font-medium text-md">{request.requestedItem.name}</p>
-                        <div className="grid grid-cols-2 gap-1 mt-1 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Quantity: </span>
-                            <span className="font-semibold">{request.requestedItem.quantityToAdd} {request.requestedItem.unit}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Category: </span>
-                            <span>{request.requestedItem.category}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground">Subcategory: </span>
-                            <span>{request.requestedItem.subcategory}</span>
+                      {request.requestedItems ? (
+                        <div>
+                          <h4 className="font-semibold mb-2 text-md">Items Requested for Addition:</h4>
+                          <ul className="space-y-2">
+                            {request.requestedItems.map((item, idx) => (
+                              <li key={idx} className="bg-slate-50 p-3 rounded-md border">
+                                <p className="font-medium text-md">{item.name}</p>
+                                <div className="grid grid-cols-2 gap-1 mt-1 text-sm">
+                                  <div>
+                                    <span className="text-muted-foreground">Quantity: </span>
+                                    <span className="font-semibold">{item.quantityToAdd} {item.unit}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Category: </span>
+                                    <span>{item.category}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-muted-foreground">Subcategory: </span>
+                                    <span>{item.subcategory}</span>
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : (
+                        <div>
+                          <h4 className="font-semibold mb-2 text-md">Item Requested for Addition:</h4>
+                          <div className="bg-slate-50 p-3 rounded-md border">
+                            <p className="font-medium text-md">{request.requestedItem?.name}</p>
+                            <div className="grid grid-cols-2 gap-1 mt-1 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Quantity: </span>
+                                <span className="font-semibold">{request.requestedItem?.quantityToAdd} {request.requestedItem?.unit}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Category: </span>
+                                <span>{request.requestedItem?.category}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Subcategory: </span>
+                                <span>{request.requestedItem?.subcategory}</span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                       {request.status === 'rejected' && request.adminNotes && (
                         <div className="mt-3 p-2 bg-yellow-100 border border-yellow-300 rounded-md">
                           <p className="text-sm font-semibold text-yellow-800">Admin Notes:</p>

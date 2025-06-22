@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { InventoryList } from "@/components/inventory/InventoryList";
 import { InventoryForm } from "@/components/inventory/InventoryForm";
-import { AddItemRequestComponent } from "@/components/inventory/AddItemRequestComponent";
+import { AddMultipleItemsRequestComponent } from "@/components/inventory/AddMultipleItemsRequestComponent";
 import { ChangeLog } from "@/components/inventory/ChangeLog";
 import { CsvImportExport } from "@/components/inventory/CsvImportExport";
 import { ImageToInventory } from "@/components/inventory/ImageToInventory";
@@ -374,7 +374,7 @@ export default function InventoryApp() {
 
         {/* Add / Subtract ------------------------------------------ */}
         <TabsContent value="add" className="mt-12">
-          <AddItemRequestComponent
+          <AddMultipleItemsRequestComponent
             unitOptions={UNIT_OPTIONS}
             subcategoryOptions={SUBCATEGORY_OPTIONS}
             defaultSubcategory={defaultSubcategory}
