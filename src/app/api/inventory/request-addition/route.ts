@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Parse the request body
     const body = await req.json();
-    const { userId, userName, requestedItem } = body;
+    const { userId, userName, requestedItem, requestedItems } = body;
 
     // 4. Validate that the authenticated user is the same as the request user
     if (uid !== userId) {
@@ -29,9 +29,11 @@ export async function POST(req: NextRequest) {
     const additionRequestData = {
       userId,
       userName,
-      requestedItem,
       requestTimestamp: FieldValue.serverTimestamp(),
       status: 'pending',
+      ...(requestedItems
+        ? { requestedItems }
+        : { requestedItem }),
     };
 
     // 6. Add the document to the additionRequests collection
