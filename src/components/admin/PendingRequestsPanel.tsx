@@ -56,7 +56,8 @@ interface AdditionRequest {
   id: string;
   userId: string;
   userName: string;
-  requestedItem: RequestedAdditionItem;
+  requestedItem?: RequestedAdditionItem;
+  requestedItems?: RequestedAdditionItem[];
   requestTimestamp: Timestamp;
   status: 'pending' | 'approved' | 'rejected';
   adminId?: string;
@@ -361,18 +362,23 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
           throw new Error(`Request is no longer pending (current status: ${currentRequestData.status}).`);
         }
 
-        // 2. Add the new item to inventory
-        const { name, category, subcategory, quantityToAdd, unit } = request.requestedItem;
+        // 2. Add the new item(s) to inventory
+        const items = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+        if (items.length === 0) {
+          throw new Error('No items found in request');
+        }
         const inventoryCollectionRef = collection(db, 'inventory');
-        const newItemRef = doc(inventoryCollectionRef);
-        
-        transaction.set(newItemRef, {
-          name,
-          category,
-          subcategory,
-          quantity: quantityToAdd,
-          unit,
-        });
+        for (const item of items) {
+          const { name, category, subcategory, quantityToAdd, unit } = item;
+          const newItemRef = doc(inventoryCollectionRef);
+          transaction.set(newItemRef, {
+            name,
+            category,
+            subcategory,
+            quantity: quantityToAdd,
+            unit,
+          });
+        }
 
         // 3. Update the addition request status and admin details
         transaction.update(requestDocRef, {
@@ -384,6 +390,9 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
 
         // 4. Log the action
         const actionLogCollection = collection(db, 'actionLogs');
+        const details = items.length === 1
+          ? { approvedItem: items[0], message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` }
+          : { approvedItems: items, message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` };
         transaction.set(doc(actionLogCollection), {
           actionType: 'approve_addition_request',
           requestId: request.id,
@@ -392,18 +401,18 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
           adminId,
           adminName,
           timestamp: serverTimestamp(),
-          details: {
-            approvedItem: request.requestedItem,
-            message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.`
-          }
+          details,
         });
 
         // 5. Create notification for the user
         const notificationsCollection = collection(db, 'notifications');
-        transaction.set(doc(notificationsCollection), { 
+        const approvalMessage = items.length === 1
+          ? `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items[0].name} has been approved. Inventory updated.`
+          : `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items.length} items has been approved. Inventory updated.`;
+        transaction.set(doc(notificationsCollection), {
           userId: request.userId,
           type: 'request_approved',
-          message: `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItem.name} has been approved. Inventory updated.`,
+          message: approvalMessage,
           requestId: request.id,
           timestamp: serverTimestamp(),
           isRead: false,
@@ -434,6 +443,11 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
     try {
       const batch = writeBatch(db);
 
+      const items = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+      if (items.length === 0) {
+        throw new Error('No items found in request');
+      }
+
       // 1. Update the addition request status, admin details, and notes
       batch.update(requestDocRef, {
         status: 'rejected',
@@ -445,6 +459,9 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
 
       // 2. Log the action
       const actionLogCollection = collection(db, 'actionLogs');
+      const details = items.length === 1
+        ? { rejectedItem: items[0], reason: rejectionNotes || "No specific reason provided.", message: `Admin ${adminName} rejected item addition request ${request.id} from user ${request.userName}.` }
+        : { rejectedItems: items, reason: rejectionNotes || "No specific reason provided.", message: `Admin ${adminName} rejected item addition request ${request.id} from user ${request.userName}.` };
       batch.set(doc(actionLogCollection), {
         actionType: 'reject_addition_request',
         requestId: request.id,
@@ -453,19 +470,18 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
         adminId,
         adminName,
         timestamp: serverTimestamp(),
-        details: {
-          rejectedItem: request.requestedItem,
-          reason: rejectionNotes || "No specific reason provided.",
-          message: `Admin ${adminName} rejected item addition request ${request.id} from user ${request.userName}.`
-        }
+        details,
       });
 
       // 3. Create notification for the user
       const notificationsCollection = collection(db, 'notifications');
-      batch.set(doc(notificationsCollection), { 
+      const rejectionMessage = items.length === 1
+        ? `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items[0].name} has been rejected. Notes: ${rejectionNotes || 'N/A'}`
+        : `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items.length} items has been rejected. Notes: ${rejectionNotes || 'N/A'}`;
+      batch.set(doc(notificationsCollection), {
         userId: request.userId,
         type: 'request_rejected',
-        message: `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItem.name} has been rejected. Notes: ${rejectionNotes || 'N/A'}`,
+        message: rejectionMessage,
         requestId: request.id,
         adminNotes: rejectionNotes || "No specific reason provided.",
         timestamp: serverTimestamp(),
@@ -646,21 +662,36 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <h4 className="font-semibold mb-2 text-md">Item Requested for Addition:</h4>
-                  <div className="bg-slate-50 p-4 rounded-md">
-                    <p className="font-medium text-lg">{request.requestedItem.name}</p>
-                    <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
-                      <div>
-                        <span className="text-muted-foreground">Quantity: </span>
-                        <span className="font-semibold">{request.requestedItem.quantityToAdd} {request.requestedItem.unit}</span>
+                  <h4 className="font-semibold mb-2 text-md">
+                    {request.requestedItems ? 'Items Requested for Addition:' : 'Item Requested for Addition:'}
+                  </h4>
+                  {request.requestedItems ? (
+                    <ul className="list-disc pl-5 space-y-2 mb-4">
+                      {request.requestedItems.map((item, idx) => (
+                        <li key={idx} className="text-sm">
+                          <span className="font-medium">{item.name}</span><br />
+                          Quantity: <span className="font-semibold">{item.quantityToAdd} {item.unit}</span><br />
+                          Category: {item.category} / {item.subcategory}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : request.requestedItem ? (
+                    <div className="bg-slate-50 p-4 rounded-md">
+                      <p className="font-medium text-lg">{request.requestedItem.name}</p>
+                      <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Quantity: </span>
+                          <span className="font-semibold">{request.requestedItem.quantityToAdd} {request.requestedItem.unit}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Category: </span>
+                          <span>{request.requestedItem.category} / {request.requestedItem.subcategory}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-muted-foreground">Category: </span>
-                        <span>{request.requestedItem.category} / {request.requestedItem.subcategory}</span>
-                      </div>
-
                     </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No item details provided.</p>
+                  )}
                   <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
                     <Button 
                       variant="destructive" 
