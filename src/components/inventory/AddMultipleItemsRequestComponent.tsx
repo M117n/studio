@@ -195,7 +195,7 @@ export function AddMultipleItemsRequestComponent({
                       <Input
                         type="text"
                         inputMode="decimal"
-                        pattern="\\d*(\\.\\d+)?"
+                        pattern="\d*(\.\d+)?"
                         placeholder="0"
                         {...field}
                         value={field.value === undefined ? '' : field.value}
@@ -304,4 +304,3 @@ export function AddMultipleItemsRequestComponent({
 }
 
 export default AddMultipleItemsRequestComponent;
-
