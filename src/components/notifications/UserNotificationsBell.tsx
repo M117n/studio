@@ -41,6 +41,7 @@ interface Notification {
   timestamp: Timestamp;
   isRead: boolean;
   adminNotes?: string;
+  approvedItems?: { name: string; quantity: number; unit: string }[];
   _friendlyMessageCache?: string; // Cache for the enhanced message
 }
 
@@ -377,7 +378,26 @@ const UserNotificationsBell = () => {
                 {expandedNotification === notif.id && (
                   <div className="px-3 pb-3 pt-0">
                     <Separator className="my-2" />
-                    {isLoadingDetails ? (
+                    {notif.type === 'request_approved' && notif.approvedItems && notif.approvedItems.length > 0 ? (
+                      <Card className="bg-slate-50 dark:bg-slate-900 border-none shadow-none">
+                        <CardContent className="p-3">
+                          <h5 className="text-xs font-semibold mb-1">Approved Items:</h5>
+                          <ul className="space-y-1">
+                            {notif.approvedItems.map((item, index) => (
+                              <li key={index} className="text-xs">
+                                <span className="font-medium">{item.name}</span>: {item.quantity} {item.unit}
+                              </li>
+                            ))}
+                          </ul>
+                          {notif.adminNotes && (
+                             <div className="mt-2">
+                               <p className="text-xs font-semibold">Admin Notes:</p>
+                               <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notif.adminNotes}</p>
+                             </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ) : isLoadingDetails ? (
                       <div className="py-2 text-center">
                         <p className="text-xs text-muted-foreground">Loading details...</p>
                       </div>
@@ -391,27 +411,16 @@ const UserNotificationsBell = () => {
                                 Status: <span className="font-medium capitalize">{requestDetails.status}</span>
                               </p>
                               
-                              {notif.adminNotes && requestDetails.adminNotes && notif.adminNotes !== requestDetails.adminNotes ? (
-                                <>
-                                  <div className="mt-2">
-                                    <p className="text-xs font-semibold">Admin Notes (on Notification):</p>
-                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notif.adminNotes}</p>
-                                  </div>
-                                  <div className="mt-2">
-                                    <p className="text-xs font-semibold">Admin Notes (on Request):</p>
-                                    <p className="text-xs text-muted-foreground whitespace-pre-wrap">{requestDetails.adminNotes}</p>
-                                  </div>
-                                </>
-                              ) : (notif.adminNotes || requestDetails.adminNotes) ? (
+                              {(notif.adminNotes || requestDetails.adminNotes) && (
                                 <div className="mt-2">
                                   <p className="text-xs font-semibold">Admin Notes:</p>
-                                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{notif.adminNotes || requestDetails.adminNotes}</p>
+                                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{requestDetails.adminNotes || notif.adminNotes}</p>
                                 </div>
-                              ) : null}
+                              )}
                             </div>
                             
                             <div>
-                              <h5 className="text-xs font-semibold mb-1">Items {notif.type === 'request_approved' ? 'Removed' : 'Requested'}:</h5>
+                              <h5 className="text-xs font-semibold mb-1">Items in Request:</h5>
                               {requestDetails.requestedItems && requestDetails.requestedItems.length > 0 ? (
                                 <ul className="space-y-1">
                                   {requestDetails.requestedItems.map((item, index) => (

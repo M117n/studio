@@ -49,3 +49,9 @@ next-env.d.ts
 
 #notes
 /notes.txt
+
+#firebase
+firebase-debug.log
+
+#windsurf
+plan.md

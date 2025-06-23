@@ -155,7 +155,7 @@ const AdminPanelPage = () => {
         const data = docSnapshot.data();
 
         if (Array.isArray(data.requestedItems)) {
-          const validatedItems = [] as AdditionRequest["requestedItems"];
+          const validatedItems: NonNullable<AdditionRequest['requestedItems']> = [];
           for (const itemData of data.requestedItems) {
             const categoryStr = itemData.category;
             const subcategoryStr = itemData.subcategory;
@@ -291,14 +291,23 @@ const AdminPanelPage = () => {
         });
 
         const notificationsRef = collection(db, 'notifications');
+        const notificationMessage = request.requestedItems.length > 1
+          ? `Your removal request for ${request.requestedItems.length} items has been approved.`
+          : `Your removal request for ${request.requestedItems[0].quantityToRemove}x ${request.requestedItems[0].name} has been approved.`;
+
         await addDoc(notificationsRef, {
           userId: request.userId,
           type: 'request_approved',
-          message: `Your removal request (ID: ${request.id.substring(0,6)}...) for ${request.requestedItems.length} item(s) has been approved.`,
+          message: notificationMessage,
           requestId: request.id,
           timestamp: serverTimestamp(),
           isRead: false,
-          link: `/notifications/${request.id}` 
+          link: `/notifications/${request.id}`,
+          approvedItems: request.requestedItems.map(item => ({
+            name: item.name,
+            quantity: item.quantityToRemove,
+            unit: item.unit
+          }))
         });
       });
 
