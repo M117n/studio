@@ -18,7 +18,7 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const token = req.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
+    const token = req.cookies.get('session')?.value;
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -54,8 +54,16 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const token = req.headers.get('cookie')?.match(/session=([^;]+)/)?.[1] ?? '';
-  const { uid } = await adminAuth.verifySessionCookie(token, true);
+  const token = req.cookies.get('session')?.value;
+  if (!token) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  let uid: string;
+  try {
+    ({ uid } = await adminAuth.verifySessionCookie(token, true));
+  } catch (err) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   // Extract the ID parameter to avoid using params.id directly
   const itemId = params.id;
@@ -136,8 +144,16 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const token = req.headers.get('cookie')?.match(/session=([^;]+)/)?.[1] ?? '';
-  const { uid } = await adminAuth.verifySessionCookie(token, true);
+  const token = req.cookies.get('session')?.value;
+  if (!token) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  let uid: string;
+  try {
+    ({ uid } = await adminAuth.verifySessionCookie(token, true));
+  } catch (err) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   
   // Extract the ID parameter to avoid using params.id directly
   const itemId = params.id;
