@@ -73,6 +73,7 @@ export function useInventory() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(await res.text());
       return (await res.json()) as InventoryItem;   // { id, ...item }
@@ -103,6 +104,7 @@ export function useInventory() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(await res.text());
     },
@@ -126,7 +128,10 @@ export function useInventory() {
     { prev: InventoryItem[] }
   >({
     mutationFn: async (id) => {
-      const res = await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/inventory/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
       if (!res.ok) throw new Error(await res.text());
     },
     onMutate: async (id) => {
