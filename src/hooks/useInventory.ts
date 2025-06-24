@@ -132,7 +132,15 @@ export function useInventory() {
         method: 'DELETE',
         credentials: 'include',
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Delete failed:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorText
+        });
+        throw new Error(`Delete failed: ${res.status} ${res.statusText} - ${errorText}`);
+      }
     },
     onMutate: async (id) => {
       const ctx = await cancelAndSnapshot();
@@ -142,6 +150,8 @@ export function useInventory() {
       return ctx;
     },
     onError: (_err, _vars, ctx) => {
+      console.error('Delete mutation error:', _err);
+      console.error('Failed to delete item with id:', _vars);
       qc.setQueryData(['inventory'], ctx?.prev);
     },
   });
