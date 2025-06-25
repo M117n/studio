@@ -20,14 +20,16 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
-import type { InventoryItem } from '@/types/inventory';
+import type { InventoryItem, Unit } from '@/types/inventory';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { convertUnits, NON_CONVERTIBLE_UNITS } from '@/lib/unitConversion';
 
 // Types for requests
 interface RequestedItemDetail {
   itemId: string;
   name: string;
   quantityToRemove: number;
-  unit: string;
+  unit: Unit;
   category?: string | null;
 }
 
@@ -36,7 +38,7 @@ interface RequestedAdditionItem {
   category: string;
   subcategory: string;
   quantityToAdd: number;
-  unit: string;
+  unit: Unit;
 }
 
 interface RemovalRequest {
@@ -78,6 +80,12 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
   const [isLoading, setIsLoading] = useState(true); // True by default, indicates overall loading
   const [error, setError] = useState<string | null>(null);
   const { user, isAdmin, loading: authHookLoading } = useAuth(); // Use 'loading' and rename to 'authHookLoading'
+  const [conflict, setConflict] = useState<{ 
+    request: AdditionRequest; 
+    item: RequestedAdditionItem; 
+    existingUnit: Unit; 
+    existingDocId: string; 
+  } | null>(null);
 
   // Effect 1: Check admin status and auth state
   useEffect(() => {
@@ -370,14 +378,35 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
         const inventoryCollectionRef = collection(db, 'inventory');
         for (const item of items) {
           const { name, category, subcategory, quantityToAdd, unit } = item;
-          const newItemRef = doc(inventoryCollectionRef);
-          transaction.set(newItemRef, {
-            name,
-            category,
-            subcategory,
-            quantity: quantityToAdd,
-            unit,
-          });
+          const existingItemRef = doc(inventoryCollectionRef, name);
+          const existingItemSnap = await transaction.get(existingItemRef);
+
+          if (existingItemSnap.exists()) {
+            const existingItemData = existingItemSnap.data() as InventoryItem;
+            if (existingItemData.unit !== unit && NON_CONVERTIBLE_UNITS.includes(unit) && NON_CONVERTIBLE_UNITS.includes(existingItemData.unit)) {
+              setConflict({
+                request,
+                item,
+                existingUnit: existingItemData.unit,
+                existingDocId: existingItemSnap.id,
+              });
+              return;
+            }
+            const convertedQuantity = convertUnits(quantityToAdd, unit, existingItemData.unit);
+            if (convertedQuantity === null) {
+              throw new Error(`Cannot convert units for item ${name} from ${unit} to ${existingItemData.unit}`);
+            }
+            transaction.update(existingItemRef, { quantity: existingItemData.quantity + convertedQuantity });
+          } else {
+            const newItemRef = doc(inventoryCollectionRef);
+            transaction.set(newItemRef, {
+              name,
+              category,
+              subcategory,
+              quantity: quantityToAdd,
+              unit,
+            });
+          }
         }
 
         // 3. Update the addition request status and admin details
@@ -421,6 +450,103 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
       });
 
       toast({ title: 'Request Approved', description: `Addition request ${request.id.substring(0,6)}... processed, inventory updated, and user notified.` });
+    } catch (error: any) {
+      console.error("Error approving addition request: ", error);
+      toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
+    }
+  };
+
+  const handleConflictResolution = async (unit: Unit) => {
+    if (!user?.uid) {
+      toast({ title: "Not Authenticated", description: "You must be logged in as an admin to approve requests.", variant: "destructive" });
+      return;
+    }
+
+    if (!conflict) {
+      console.error("handleConflictResolution called without an active conflict.");
+      toast({ title: "Error", description: "Cannot resolve conflict: conflict data is missing.", variant: "destructive" });
+      return;
+    }
+
+    const adminName = user.displayName || user.email || 'Admin User';
+    const adminId = user.uid;
+
+    const db = getFirestore(auth.app);
+    const requestDocRef = doc(db, 'additionRequests', conflict.request.id);
+    const existingItemRef = doc(db, 'inventory', conflict.existingDocId);
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        // 1. Update the existing item's unit
+        transaction.update(existingItemRef, { unit });
+
+        // 2. Add the new item(s) to inventory
+        const items = conflict.request.requestedItems ?? (conflict.request.requestedItem ? [conflict.request.requestedItem] : []);
+        if (items.length === 0) {
+          throw new Error('No items found in request');
+        }
+        const inventoryCollectionRef = collection(db, 'inventory');
+        for (const item of items) {
+          const { name, category, subcategory, quantityToAdd } = item;
+          const existingItemSnap = await transaction.get(existingItemRef);
+
+          if (existingItemSnap.exists()) {
+            const existingItemData = existingItemSnap.data() as InventoryItem;
+            transaction.update(existingItemRef, { quantity: existingItemData.quantity + quantityToAdd });
+          } else {
+            const newItemRef = doc(inventoryCollectionRef);
+            transaction.set(newItemRef, {
+              name,
+              category,
+              subcategory,
+              quantity: quantityToAdd,
+              unit,
+            });
+          }
+        }
+
+        // 3. Update the addition request status and admin details
+        transaction.update(requestDocRef, {
+          status: 'approved',
+          adminId,
+          adminName,
+          processedTimestamp: serverTimestamp(),
+        });
+
+        // 4. Log the action
+        const actionLogCollection = collection(db, 'actionLogs');
+        const details = items.length === 1
+          ? { approvedItem: items[0], message: `Admin ${adminName} approved item addition request ${conflict.request.id} from user ${conflict.request.userName}.` }
+          : { approvedItems: items, message: `Admin ${adminName} approved item addition request ${conflict.request.id} from user ${conflict.request.userName}.` };
+        transaction.set(doc(actionLogCollection), {
+          actionType: 'approve_addition_request',
+          requestId: conflict.request.id,
+          userId: conflict.request.userId,
+          userName: conflict.request.userName,
+          adminId,
+          adminName,
+          timestamp: serverTimestamp(),
+          details,
+        });
+
+        // 5. Create notification for the user
+        const notificationsCollection = collection(db, 'notifications');
+        const approvalMessage = items.length === 1
+          ? `Your item addition request (ID: ${conflict.request.id.substring(0,6)}...) for ${items[0].name} has been approved. Inventory updated.`
+          : `Your item addition request (ID: ${conflict.request.id.substring(0,6)}...) for ${items.length} items has been approved. Inventory updated.`;
+        transaction.set(doc(notificationsCollection), {
+          userId: conflict.request.userId,
+          type: 'request_approved',
+          message: approvalMessage,
+          requestId: conflict.request.id,
+          timestamp: serverTimestamp(),
+          isRead: false,
+          link: `/user/requests/${conflict.request.id}`
+        });
+      });
+
+      setConflict(null);
+      toast({ title: 'Request Approved', description: `Addition request ${conflict.request.id.substring(0,6)}... processed, inventory updated, and user notified.` });
     } catch (error: any) {
       console.error("Error approving addition request: ", error);
       toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
@@ -718,6 +844,31 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
             ))
           )}
         </div>
+      )}
+      
+      {/* Unit Conflict Resolution Dialog */}
+      {conflict && (
+        <Dialog open={!!conflict} onOpenChange={() => setConflict(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Unit Conversion Conflict</DialogTitle>
+              <DialogDescription className="pt-2">
+                The item "<span className="font-bold">{conflict.item.name}</span>" exists as "<span className="font-bold">{conflict.existingUnit}</span>", but the request is to add "<span className="font-bold">{conflict.item.unit}</span>". These units cannot be converted automatically.
+                <br /><br />
+                Please choose which unit to use for this item. The quantities will be summed directly.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:justify-end">
+              <Button variant="outline" onClick={() => setConflict(null)}>Cancel</Button>
+              <Button onClick={() => handleConflictResolution(conflict.item.unit)}>
+                Use New Unit: {conflict.item.unit}
+              </Button>
+              <Button onClick={() => handleConflictResolution(conflict.existingUnit)}>
+                Keep Existing Unit: {conflict.existingUnit}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
