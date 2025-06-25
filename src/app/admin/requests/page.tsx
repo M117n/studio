@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast"; 
 import { InventoryItem, Category, SubCategory, Unit, isValidCategory, isValidSubCategory, isValidUnit } from '@/types/inventory'; 
+import { convertUnits, NON_CONVERTIBLE_UNITS } from '@/lib/unitConversion';
 
 // Define a more specific type for the items within a removal request
 interface RequestedItemDetail {
@@ -387,6 +388,7 @@ const AdminPanelPage = () => {
     }
 
     const db = getFirestore(auth.app);
+    const inventoryCollectionRef = collection(db, 'inventory');
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -398,22 +400,62 @@ const AdminPanelPage = () => {
           processedTimestamp: serverTimestamp(),
         });
 
-        const inventoryCollectionRef = collection(db, 'inventory');
-        const itemsToAdd = request.requestedItems ?? [request.requestedItem];
-        itemsToAdd.forEach(item => {
-          const newItemData: Omit<InventoryItem, 'id'> = {
-            name: item!.name,
-            category: item!.category,
-            subcategory: item!.subcategory,
-            quantity: item!.quantityToAdd,
-            unit: item!.unit,
-            lastUpdated: serverTimestamp() as Timestamp,
-          };
-          transaction.set(doc(inventoryCollectionRef), newItemData);
-        });
+        const itemsToAdd = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+
+        for (const item of itemsToAdd) {
+          if (!item) continue;
+
+          // Create a predictable, valid document ID from the item name.
+          const normalizedItemName = item.name.trim().toLowerCase();
+          const docId = normalizedItemName.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+          const itemRef = doc(db, 'inventory', docId);
+
+          const docSnap = await transaction.get(itemRef);
+
+          if (docSnap.exists()) {
+            // Item exists, so we update its quantity.
+            const existingItemData = docSnap.data() as InventoryItem;
+            let quantityToAdd = item.quantityToAdd;
+
+            // Handle unit conversion if units are different
+            if (existingItemData.unit !== item.unit) {
+              // Prevent conversion for non-convertible units
+              if (NON_CONVERTIBLE_UNITS.includes(existingItemData.unit) || NON_CONVERTIBLE_UNITS.includes(item.unit)) {
+                throw new Error(`Cannot convert between ${item.unit} and ${existingItemData.unit} for item ${item.name}. Please handle manually.`);
+              }
+              
+              const convertedQuantity = convertUnits(item.quantityToAdd, item.unit, existingItemData.unit);
+
+              if (convertedQuantity === null) {
+                // This handles cases where a conversion factor is not defined between two convertible units.
+                throw new Error(`Unit conversion from ${item.unit} to ${existingItemData.unit} is not possible for item '${item.name}'.`);
+              }
+
+              quantityToAdd = convertedQuantity;
+            }
+
+            const newQuantity = existingItemData.quantity + quantityToAdd;
+
+            transaction.update(itemRef, {
+              quantity: newQuantity,
+              lastUpdated: serverTimestamp(),
+            });
+          } else {
+            // Item does not exist, so we add it as a new document with the predictable ID.
+            const newItemData: Omit<InventoryItem, 'id'> = {
+              name: item.name.trim(),
+              category: item.category,
+              subcategory: item.subcategory,
+              quantity: item.quantityToAdd,
+              unit: item.unit,
+              lastUpdated: serverTimestamp() as Timestamp,
+            };
+            transaction.set(itemRef, newItemData);
+          }
+        }
 
         const actionLogRef = collection(db, 'actionLogs');
-        await addDoc(actionLogRef, {
+        transaction.set(doc(actionLogRef), {
           actionType: 'approve_addition_request',
           requestId: request.id,
           userId: request.userId,
@@ -428,7 +470,7 @@ const AdminPanelPage = () => {
         });
 
         const notificationsRef = collection(db, 'notifications');
-        await addDoc(notificationsRef, {
+        transaction.set(doc(notificationsRef), {
           userId: request.userId,
           type: 'request_approved',
           message: `Your addition request ${request.id.substring(0,6)}... has been approved.`,
