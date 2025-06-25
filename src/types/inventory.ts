@@ -81,6 +81,7 @@ export const isValidUnit = (value: any): value is AppSpecificUnit => {
 export interface InventoryItem {
   id: string;
   name: string;
+  normalizedName?: string; // For case-insensitive search
   quantity: number;
   unit: AppSpecificUnit;
   category?: Category;

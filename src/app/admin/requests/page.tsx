@@ -3,10 +3,11 @@
 
 import { AdminNavbar } from '@/components/AdminNavbar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { useEffect, useState } from 'react';
 import {
-  getFirestore, collection, query, where, onSnapshot, doc, runTransaction, serverTimestamp, writeBatch, addDoc, Timestamp, DocumentReference
+  getFirestore, collection, query, where, onSnapshot, doc, runTransaction, serverTimestamp, writeBatch, addDoc, Timestamp, DocumentReference, getDoc, getDocs
 } from 'firebase/firestore';
 import { auth } from '@/lib/firebaseClient'; 
 import { useAuth } from '@/hooks/useAuth'; 
@@ -75,6 +76,13 @@ interface AdminUserData {
   picture?: string;
 }
 
+interface ApprovalAction {
+  type: 'create' | 'update';
+  docId: string;
+  item: { name: string; category: Category; subcategory: SubCategory; quantityToAdd: number; unit: Unit; };
+  existingData?: InventoryItem;
+}
+
 const AdminPanelPage = () => {
   const { toast } = useToast();
   const [requests, setRequests] = useState<RemovalRequest[]>([]);
@@ -83,7 +91,13 @@ const AdminPanelPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [adminUser, setAdminUser] = useState<AdminUserData | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('removal'); 
+  const [activeTab, setActiveTab] = useState('removal');
+  const [conflict, setConflict] = useState<{
+    request: AdditionRequest;
+    item: { name: string; category: Category; subcategory: SubCategory; quantityToAdd: number; unit: Unit; };
+    existingUnit: Unit;
+    existingDocId: string;
+  } | null>(null);
 
   // Fetch admin user data and then removal requests
   useEffect(() => {
@@ -381,14 +395,12 @@ const AdminPanelPage = () => {
     }
   };
 
-  const handleApproveAdditionRequest = async (request: AdditionRequest) => {
+  const executeApproveAddition = async (request: AdditionRequest, actions: ApprovalAction[], resolutions: { [itemName: string]: Unit } = {}) => {
     if (!adminUser?.uid || !adminUser?.name) {
-      toast({ title: "Error", description: "Admin user data not found. Cannot process request.", variant: "destructive" });
+      toast({ title: "Error", description: "Admin user data not found.", variant: "destructive" });
       return;
     }
-
     const db = getFirestore(auth.app);
-    const inventoryCollectionRef = collection(db, 'inventory');
 
     try {
       await runTransaction(db, async (transaction) => {
@@ -400,54 +412,47 @@ const AdminPanelPage = () => {
           processedTimestamp: serverTimestamp(),
         });
 
-        const itemsToAdd = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+        for (const action of actions) {
+          const itemRef = doc(db, 'inventory', action.docId);
 
-        for (const item of itemsToAdd) {
-          if (!item) continue;
+          if (action.type === 'update') {
+            if (!action.existingData) {
+              console.error("Critical error: Update action is missing existing data for item:", action.item.name);
+              throw new Error("Invalid action state: existingData is missing for an update.");
+            }
+            const existingItemData = action.existingData;
+            let quantityToAdd = action.item.quantityToAdd;
+            let finalUnit = existingItemData.unit;
+            const updateData: { [key: string]: any } = {};
 
-          // Create a predictable, valid document ID from the item name.
-          const normalizedItemName = item.name.trim().toLowerCase();
-          const docId = normalizedItemName.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-          const itemRef = doc(db, 'inventory', docId);
-
-          const docSnap = await transaction.get(itemRef);
-
-          if (docSnap.exists()) {
-            // Item exists, so we update its quantity.
-            const existingItemData = docSnap.data() as InventoryItem;
-            let quantityToAdd = item.quantityToAdd;
-
-            // Handle unit conversion if units are different
-            if (existingItemData.unit !== item.unit) {
-              // Prevent conversion for non-convertible units
-              if (NON_CONVERTIBLE_UNITS.includes(existingItemData.unit) || NON_CONVERTIBLE_UNITS.includes(item.unit)) {
-                throw new Error(`Cannot convert between ${item.unit} and ${existingItemData.unit} for item ${item.name}. Please handle manually.`);
-              }
-              
-              const convertedQuantity = convertUnits(item.quantityToAdd, item.unit, existingItemData.unit);
-
-              if (convertedQuantity === null) {
-                // This handles cases where a conversion factor is not defined between two convertible units.
-                throw new Error(`Unit conversion from ${item.unit} to ${existingItemData.unit} is not possible for item '${item.name}'.`);
-              }
-
-              quantityToAdd = convertedQuantity;
+            // Add normalizedName if it's missing (progressive migration)
+            if (!existingItemData.normalizedName) {
+              updateData.normalizedName = action.item.name.trim().toLowerCase();
             }
 
-            const newQuantity = existingItemData.quantity + quantityToAdd;
+            // Apply resolution from conflict dialog if it exists
+            if (resolutions[action.item.name]) {
+              finalUnit = resolutions[action.item.name];
+            } else if (existingItemData.unit !== action.item.unit) {
+              // Otherwise, convert if possible (pre-check confirmed it's convertible)
+              const convertedQuantity = convertUnits(action.item.quantityToAdd, action.item.unit, existingItemData.unit);
+              quantityToAdd = convertedQuantity!;
+            }
 
-            transaction.update(itemRef, {
-              quantity: newQuantity,
-              lastUpdated: serverTimestamp(),
-            });
-          } else {
-            // Item does not exist, so we add it as a new document with the predictable ID.
+            updateData.quantity = existingItemData.quantity + quantityToAdd;
+            updateData.unit = finalUnit;
+            updateData.lastUpdated = serverTimestamp();
+
+            transaction.update(itemRef, updateData);
+
+          } else { // action.type === 'create'
             const newItemData: Omit<InventoryItem, 'id'> = {
-              name: item.name.trim(),
-              category: item.category,
-              subcategory: item.subcategory,
-              quantity: item.quantityToAdd,
-              unit: item.unit,
+              name: action.item.name.trim(),
+              normalizedName: action.item.name.trim().toLowerCase(),
+              category: action.item.category,
+              subcategory: action.item.subcategory,
+              quantity: action.item.quantityToAdd,
+              unit: action.item.unit,
               lastUpdated: serverTimestamp() as Timestamp,
             };
             transaction.set(itemRef, newItemData);
@@ -464,8 +469,8 @@ const AdminPanelPage = () => {
           adminName: adminUser.name,
           timestamp: serverTimestamp(),
           details: {
-            approvedItems: itemsToAdd,
-            message: `Approved addition request ${request.id}.`,
+            approvedItems: actions.map(action => action.item),
+            message: `Admin ${adminUser.name} approved addition request ${request.id}.`
           },
         });
 
@@ -473,25 +478,151 @@ const AdminPanelPage = () => {
         transaction.set(doc(notificationsRef), {
           userId: request.userId,
           type: 'request_approved',
-          message: `Your addition request ${request.id.substring(0,6)}... has been approved.`,
+          message: `Your addition request for '${actions.map(action => action.item.name).join(', ')}' has been approved.`,
           requestId: request.id,
           timestamp: serverTimestamp(),
           isRead: false,
-          link: `/inventory`
+          link: `/notifications/${request.id}`
         });
       });
 
-      toast({
-        title: "Addition Request Approved",
-        description: `Addition request ${request.id} has been approved and items added to inventory.`,
-      });
+      toast({ title: "Addition Request Approved", description: `Request ${request.id} has been approved.` });
+      if (conflict) setConflict(null); // Close dialog
+
     } catch (e: any) {
       console.error("Error approving addition request: ", e);
-      toast({
-        title: "Error Approving Request",
-        description: e.message || "An unexpected error occurred.",
-        variant: "destructive",
-      });
+      toast({ title: "Error Approving Request", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleApproveAdditionRequest = async (request: AdditionRequest) => {
+    if (!adminUser?.uid) return;
+    const db = getFirestore(auth.app);
+    const inventoryRef = collection(db, 'inventory');
+
+    try {
+      const itemsToAdd = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+      const actions: ApprovalAction[] = [];
+
+      for (const item of itemsToAdd) {
+        if (!item) continue;
+
+        const trimmedName = item.name.trim();
+        const normalizedName = trimmedName.toLowerCase();
+        let existingDocId: string | null = null;
+        let existingData: InventoryItem | null = null;
+
+        // Step 1: Query by normalizedName for case-insensitive matching.
+        const normalizedQuery = query(inventoryRef, where("normalizedName", "==", normalizedName));
+        const normalizedSnapshot = await getDocs(normalizedQuery);
+
+        if (!normalizedSnapshot.empty) {
+          const doc = normalizedSnapshot.docs[0];
+          existingDocId = doc.id;
+          existingData = doc.data() as InventoryItem;
+        } else {
+          // Step 2: If not found, query by exact name for backward compatibility.
+          const legacyQuery = query(inventoryRef, where("name", "==", trimmedName));
+          const legacySnapshot = await getDocs(legacyQuery);
+          if (!legacySnapshot.empty) {
+            const doc = legacySnapshot.docs[0];
+            existingDocId = doc.id;
+            existingData = doc.data() as InventoryItem;
+          }
+        }
+
+        if (existingDocId && existingData) {
+          // Item exists, check for unit mismatches
+          if (existingData.unit !== item.unit) {
+            const convertedQuantity = convertUnits(item.quantityToAdd, item.unit, existingData.unit);
+            if (convertedQuantity === null) {
+              // Non-convertible conflict: open dialog and stop.
+              setConflict({ request, item, existingUnit: existingData.unit, existingDocId });
+              return;
+            }
+          }
+          actions.push({ type: 'update', docId: existingDocId, item, existingData });
+        } else {
+          // Item is new, create it with a predictable ID from its normalized name.
+          const predictableId = normalizedName.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+          actions.push({ type: 'create', docId: predictableId, item });
+        }
+      }
+
+      // If we get here, no conflicts were found. Proceed with approval.
+      await executeApproveAddition(request, actions);
+
+    } catch (e: any) {
+      console.error("Error during pre-check: ", e);
+      toast({ title: "Error Checking Request", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleConflictResolution = async (chosenUnit: Unit) => {
+    if (!conflict) return;
+    
+    const { request, item, existingDocId } = conflict;
+    const resolutions = { [item.name]: chosenUnit };
+    
+    setConflict(null); // Close dialog
+
+    // To handle the rest of the items in the request correctly, we must re-run the full pre-check.
+    const db = getFirestore(auth.app);
+    const inventoryRef = collection(db, 'inventory');
+    const itemsToAdd = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+    const actions: ApprovalAction[] = [];
+
+    try {
+      for (const currentItem of itemsToAdd) {
+        if (!currentItem) continue;
+
+        const trimmedName = currentItem.name.trim();
+        const normalizedName = trimmedName.toLowerCase();
+        let otherExistingDocId: string | null = null;
+        let otherExistingData: InventoryItem | null = null;
+
+        // If this is the item we just resolved, we already know its ID and data.
+        if (currentItem.name === item.name) {
+          otherExistingDocId = existingDocId;
+          // We need to fetch the latest data to be safe in the transaction
+          const docSnap = await getDoc(doc(db, 'inventory', existingDocId));
+          if (docSnap.exists()) {
+            otherExistingData = docSnap.data() as InventoryItem;
+          }
+        } else {
+          // Pre-check logic for other items in the request
+          const normalizedQuery = query(inventoryRef, where("normalizedName", "==", normalizedName));
+          const normalizedSnapshot = await getDocs(normalizedQuery);
+          if (!normalizedSnapshot.empty) {
+            const doc = normalizedSnapshot.docs[0];
+            otherExistingDocId = doc.id;
+            otherExistingData = doc.data() as InventoryItem;
+          } else {
+            const legacyQuery = query(inventoryRef, where("name", "==", trimmedName));
+            const legacySnapshot = await getDocs(legacyQuery);
+            if (!legacySnapshot.empty) {
+              const doc = legacySnapshot.docs[0];
+              otherExistingDocId = doc.id;
+              otherExistingData = doc.data() as InventoryItem;
+            }
+          }
+        }
+
+        if (otherExistingDocId && otherExistingData) {
+          // For the resolved item, we don't need to check for conflicts again.
+          // For other items, we assume they passed the initial check.
+          actions.push({ type: 'update', docId: otherExistingDocId, item: currentItem, existingData: otherExistingData });
+        } else {
+          const predictableId = normalizedName.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+          actions.push({ type: 'create', docId: predictableId, item: currentItem });
+        }
+      }
+
+      await executeApproveAddition(request, actions, resolutions);
+
+    } catch (e: any) {
+      console.error("Error during conflict resolution pre-check: ", e);
+      toast({ title: "Error Resolving Conflict", description: e.message, variant: "destructive" });
     }
   };
 
@@ -763,6 +894,32 @@ const AdminPanelPage = () => {
             )}
           </TabsContent>
         </Tabs>
+
+        {/* Unit Conflict Resolution Dialog */}
+        {conflict && (
+          <Dialog open={!!conflict} onOpenChange={() => setConflict(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Unit Conversion Conflict</DialogTitle>
+                <DialogDescription className="pt-2">
+                  The item "<span className="font-bold">{conflict.item.name}</span>" exists as "<span className="font-bold">{conflict.existingUnit}</span>", but the request is to add "<span className="font-bold">{conflict.item.unit}</span>". These units cannot be converted automatically.
+                  <br /><br />
+                  Please choose which unit to use for this item. The quantities will be summed directly.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConflict(null)}>Cancel</Button>
+                <Button onClick={() => handleConflictResolution(conflict.item.unit)}>
+                  Use New Unit: {conflict.item.unit}
+                </Button>
+                <Button onClick={() => handleConflictResolution(conflict.existingUnit)}>
+                  Keep Existing Unit: {conflict.existingUnit}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
       </div>
     </div>
   );
