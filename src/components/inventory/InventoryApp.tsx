@@ -88,7 +88,7 @@ export default function InventoryApp() {
   const currentUser = auth.currentUser;
   const userId = currentUser?.uid;
   const userName = currentUser?.displayName || currentUser?.email || undefined; // Ensure it's string or undefined
-  const { isAdmin, user, isAuthenticated, loading: authLoading } = useAuth(); // Get user admin status and other auth data
+  const { isAdmin, isMasterAdmin, user, isAuthenticated, loading: authLoading } = useAuth(); // Get user admin status and other auth data
 
   /* ------------------------- local state ------------------------- */
   const [changeLog, setChangeLog] = useState<string[]>(() =>
@@ -345,8 +345,8 @@ export default function InventoryApp() {
             Add Item
           </TabsTrigger>
           <TabsTrigger value="changelog">Log</TabsTrigger>
-          <TabsTrigger value="importexport">CSV</TabsTrigger>
-          <TabsTrigger value="image">Image</TabsTrigger>
+          {(isAdmin || isMasterAdmin) && <TabsTrigger value="importexport">CSV</TabsTrigger>}
+          {(isAdmin || isMasterAdmin) && <TabsTrigger value="image">Image</TabsTrigger>}
           <TabsTrigger value="subtractItems">Subtract Items</TabsTrigger>
         </TabsList>
 
@@ -391,76 +391,85 @@ export default function InventoryApp() {
             </CardHeader>
             <CardContent>
               <ChangeLog changeLog={changeLog} />
-              <AlertDialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
-                <AlertDialogTrigger asChild>
-                  <Button variant="ghost" className="text-red-500 mt-4">
-                    Clear log
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Are you sure you want to clear the change log?
-                    </AlertDialogTitle>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => {
-                        setChangeLog([]);
-                        setIsAlertDialogOpen(false);
-                      }}
-                      className="bg-red-500 text-white hover:bg-red-600"
-                    >
-                      Clear
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {(isAdmin || isMasterAdmin) && (
+                <AlertDialog
+                  open={isAlertDialogOpen}
+                  onOpenChange={setIsAlertDialogOpen}
+                >
+                  <AlertDialogTrigger asChild>
+                    <Button variant="ghost" className="text-red-500 mt-4">
+                      Clear log
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Are you sure you want to clear the change log?
+                      </AlertDialogTitle>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => {
+                          setChangeLog([]);
+                          setIsAlertDialogOpen(false);
+                        }}
+                        className="bg-red-500 text-white hover:bg-red-600"
+                      >
+                        Clear
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* CSV ------------------------------------------------------ */}
-        <TabsContent value="importexport" className="mt-12">
-          <Card>
-            <CardHeader>
-              <CardTitle>CSV Import / Export</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CsvImportExport
-                inventory={inventory}
-                addItem={addItem}
-                editItem={editItem}
-                deleteItem={deleteItem}
-                setChangeLog={setChangeLog}
-                setPreviousStates={setPreviousStates}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* CSV Import/Export --------------------------------------- */}
+        {(isAdmin || isMasterAdmin) && (
+          <TabsContent value="importexport" className="mt-12">
+            <Card>
+              <CardHeader>
+                <CardTitle>CSV Import/Export</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CsvImportExport
+                  inventory={inventory}
+                  addItem={addItem}
+                  editItem={editItem}
+                  deleteItem={deleteItem}
+                  setChangeLog={setChangeLog}
+                  setPreviousStates={setPreviousStates}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
-        {/* Image ---------------------------------------------------- */}
-        <TabsContent value="image" className="mt-12">
-          <Card>
-            <CardHeader>
-              <CardTitle>Image ➜ Inventory</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ImageToInventory
-                onAddItem={addItem}
-                defaultSubcategory={defaultSubcategory}
-              />
-            </CardContent>
-          </Card>
-        </TabsContent>
+        {/* Image to Inventory -------------------------------------- */}
+        {(isAdmin || isMasterAdmin) && (
+          <TabsContent value="image" className="mt-12">
+            <Card>
+              <CardHeader>
+                <CardTitle>Image to Inventory</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ImageToInventory
+                  onAddItem={addItem}
+                  defaultSubcategory={defaultSubcategory}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
-        {/* Subtract Items Tab --------------------------------------- */}
+        {/* Subtract Items ------------------------------------------ */}
         <TabsContent value="subtractItems" className="mt-12">
-          <SubtractItemsComponent 
-            inventory={inventory} 
-            userId={userId} // string | undefined
-            userName={userName} // string | undefined
+          <SubtractItemsComponent
+            inventory={inventory}
+            userId={userId}
+            userName={userName}
           />
         </TabsContent>
       </Tabs>
