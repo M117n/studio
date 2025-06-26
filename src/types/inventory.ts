@@ -2,7 +2,7 @@
 // Centralised domain constants
 // ---------------------------------------------------------------------------
 
-import { Timestamp } from 'firebase/firestore';
+import { AppTimestamp } from './timestamp';
 
 // USER ACTION: Replace these placeholder enums with your actual application-specific enums.
 export enum Category {
@@ -86,7 +86,7 @@ export interface InventoryItem {
   unit: AppSpecificUnit;
   category?: Category;
   subcategory?: SubCategory;
-  lastUpdated?: Timestamp;
+  lastUpdated?: AppTimestamp;
 }
 
 export type InventoryItemData = Omit<InventoryItem, "id">;
