@@ -237,24 +237,6 @@ export function AdminPanelModal() {
                       </CardContent>
                     </Card>
                   )}
-                  
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg">Full Admin Dashboard</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Button 
-                        variant="outline"
-                        onClick={() => {
-                          setIsOpen(false);
-                          router.push('/admin/dashboard');
-                        }}
-                        className="w-full"
-                      >
-                        Open Full Dashboard
-                      </Button>
-                    </CardContent>
-                  </Card>
                 </div>
               </TabsContent>
               

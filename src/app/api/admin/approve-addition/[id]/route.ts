@@ -1,111 +1,132 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, adminAuth } from '@/lib/firebaseAdmin'; // Assuming firebaseAdmin is correctly set up
+import { db, adminAuth } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
-import { getMainCategory } from '@/types/inventory'; // Assuming this path is correct
-import type { InventoryItemData, Unit, SubCategory } from '@/types/inventory';
-import type { AdditionRequestDoc } from '@/types/admin'; // Assuming AdditionRequestDoc is here
+import { InventoryItem, InventoryItemData, Unit, SubCategory, Category, isValidCategory, isValidSubCategory, isValidUnit } from '@/types/inventory';
+import { AdditionRequestDoc } from '@/types/admin';
+import { convertUnits } from '@/lib/unitConversion';
+import { AppTimestamp } from '@/types/timestamp';
 
-interface AdminUser {
-  uid: string;
-  email?: string;
-  displayName?: string;
-  customClaims?: { [key: string]: any };
-}
+// Helper to get the main category from a subcategory
+const getMainCategory = (sub: SubCategory): Category => {
+  if (["fruit","vegetables","juices","dairy"].includes(sub)) return Category.COOLER;
+  if (["meats","cooked meats","frozen vegetables","bread","desserts","soups","dressings"].includes(sub)) return Category.FREEZER;
+  if (sub === "dry")    return Category.DRY;
+  if (sub === "canned") return Category.CANNED;
+  return Category.OTHER;
+};
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const { id: requestId } = params;
+  const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
+
+  if (!token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  let adminUid;
+  let adminName;
   try {
-    const additionRequestId = params.id;
-    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
+    const decodedToken = await adminAuth.verifySessionCookie(token, true);
+    adminUid = decodedToken.uid;
+    const adminUser = await adminAuth.getUser(adminUid);
+    adminName = adminUser.displayName || adminUser.email || 'Admin';
+  } catch (error) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized: No session cookie" }, { status: 401 });
-    }
+  const requestRef = db.collection('additionRequests').doc(requestId);
 
-    let decodedToken;
-    try {
-      decodedToken = await adminAuth.verifySessionCookie(token, true);
-    } catch (error) {
-      return NextResponse.json({ error: "Unauthorized: Invalid session cookie" }, { status: 401 });
-    }
-
-    const { uid } = decodedToken as AdminUser;
-
-    // Admin check: Fetch user's custom claims or a document indicating admin role
-    // This is a simplified check; a more robust solution might involve checking a 'roles' collection
-    // or specific custom claims set during user role management.
-    const user = await adminAuth.getUser(uid);
-    if (!user.customClaims?.isAdmin) {
-      return NextResponse.json({ error: "Forbidden: User is not an admin" }, { status: 403 });
-    }
-    const adminDisplayName = user.displayName || uid; // Use displayName or UID as adminName
-
-    const additionRequestRef = db.collection('additionRequests').doc(additionRequestId);
-
-    // Use a transaction to ensure atomicity
-    const newInventoryItemId = await db.runTransaction(async (transaction) => {
-      const additionRequestSnap = await transaction.get(additionRequestRef);
-
-      if (!additionRequestSnap.exists) {
-        // Throw an error to be caught by the outer try/catch, transaction will auto-rollback
-        throw new Error("Addition request not found."); 
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      const requestDoc = await transaction.get(requestRef);
+      if (!requestDoc.exists) {
+        throw new Error("Addition request not found.");
       }
 
-      const additionRequestData = additionRequestSnap.data() as AdditionRequestDoc;
-
-      if (additionRequestData.status !== 'pending') {
-        // Throw an error if already processed
-        throw new Error(`Request already processed with status: ${additionRequestData.status}.`);
+      const requestData = requestDoc.data() as AdditionRequestDoc;
+      if (requestData.status !== 'pending') {
+        throw new Error(`Request has already been ${requestData.status}.`);
       }
 
-      const { requestedItem } = additionRequestData;
+      const { requestedItem } = requestData;
+      const { name, quantityToAdd, unit, subcategory } = requestedItem;
+      const category = getMainCategory(subcategory as SubCategory);
+      const normalizedName = name.trim().toLowerCase();
 
-      // Derive main category
-      const mainCategory = getMainCategory(requestedItem.subcategory as SubCategory);
-      if (!mainCategory) {
-        // This case should ideally be prevented by validation when subcategory is chosen
-        throw new Error(`Could not determine main category for subcategory: ${requestedItem.subcategory}`);
+      const inventoryRef = db.collection('inventory');
+      const query = inventoryRef.where('normalizedName', '==', normalizedName).limit(1);
+      const snapshot = await transaction.get(query);
+
+      let itemId: string;
+      let finalItemData: InventoryItem;
+
+      if (!snapshot.empty) {
+        // Item exists, update it
+        const existingDoc = snapshot.docs[0];
+        itemId = existingDoc.id;
+        const existingData = existingDoc.data() as InventoryItem;
+        let quantityToAddConverted = quantityToAdd;
+
+        if (existingData.unit !== unit) {
+          const converted = convertUnits(quantityToAdd, unit as Unit, existingData.unit);
+          if (converted === null) {
+            throw new Error(`Cannot convert units from ${unit} to ${existingData.unit} for item ${name}.`);
+          }
+          quantityToAddConverted = converted;
+        }
+
+        const newQuantity = existingData.quantity + quantityToAddConverted;
+        transaction.update(existingDoc.ref, {
+          quantity: newQuantity,
+          lastUpdated: FieldValue.serverTimestamp(),
+        });
+        finalItemData = { ...existingData, id: itemId, quantity: newQuantity };
+      } else {
+        // Item does not exist, create it
+        const newItemRef = inventoryRef.doc();
+        itemId = newItemRef.id;
+        const newItemData: InventoryItemData = {
+          name: name.trim(),
+          normalizedName,
+          quantity: quantityToAdd,
+          unit: unit as Unit,
+          category,
+          subcategory: subcategory as SubCategory,
+          lastUpdated: FieldValue.serverTimestamp() as AppTimestamp,
+        };
+        transaction.set(newItemRef, newItemData);
+        finalItemData = { ...newItemData, id: itemId };
       }
-      
-      const newItemData: InventoryItemData = {
-        name: requestedItem.name,
-        quantity: requestedItem.quantityToAdd,
-        unit: requestedItem.unit as Unit, // Cast to Unit
-        subcategory: requestedItem.subcategory as SubCategory, // Cast to SubCategory
-        category: mainCategory, // Derived main category
-      };
 
-      // Add to inventory - generate a new ID for the inventory item
-      const newInventoryItemRef = db.collection('inventory').doc();
-      transaction.set(newInventoryItemRef, newItemData);
-
-      // Update the addition request
-      transaction.update(additionRequestRef, {
+      // Update the request status
+      transaction.update(requestRef, {
         status: 'approved',
-        adminId: uid,
-        adminName: adminDisplayName, // Store admin's name
+        adminId: adminUid,
+        adminName: adminName,
         processedTimestamp: FieldValue.serverTimestamp(),
       });
-      
-      return newInventoryItemRef.id; // Return the new item's ID from the transaction
+
+      // Create notification for the user
+      const notificationRef = db.collection('notifications').doc();
+      transaction.set(notificationRef, {
+        userId: requestData.userId,
+        type: 'request_approved',
+        message: `Your addition request for ${quantityToAdd}x ${name} has been approved.`,
+        requestId: requestId,
+        timestamp: FieldValue.serverTimestamp(),
+        isRead: false,
+      });
+
+      return { itemId, item: finalItemData };
     });
-    
-    return NextResponse.json(
-      { message: 'Addition request approved successfully', itemId: newInventoryItemId },
-      { status: 200 }
-    );
+
+    return NextResponse.json({ message: "Request approved successfully.", itemId: result.itemId, item: result.item }, { status: 200 });
 
   } catch (error: any) {
-    console.error("Error processing addition request approval:", error);
-    // Differentiate errors based on message content from transaction
-    if (error.message === "Addition request not found.") {
-        return NextResponse.json({ error: error.message }, { status: 404 });
-    }
-    if (error.message.startsWith("Request already processed") || error.message.startsWith("Could not determine main category")) {
-        return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'Failed to approve addition request', details: error.message }, { status: 500 });
+    console.error("Error approving addition request:", error);
+    return NextResponse.json({ error: error.message || "Failed to approve request." }, { status: 500 });
   }
 }
