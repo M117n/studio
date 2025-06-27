@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
 import type { InventoryItem, InventoryItemData } from "@/types/inventory";
-import { db, adminAuth } from "@/lib/firebaseAdmin";
+import { db } from "@/lib/firebaseAdmin";
+import { getUserUid } from "@/lib/auth";
 import { FieldValue } from "firebase-admin/firestore";
 import type { ChangeLogEntry } from "@/types/changeLog";
 
@@ -15,15 +15,10 @@ import type { ChangeLogEntry } from "@/types/changeLog";
 type CreateItemPayload = Partial<InventoryItem> & InventoryItemData;
 
 // GET /api/inventory - list all inventory items
-export async function GET(request: Request) { // Added request parameter
+export async function GET(request: Request) {
   try {
-    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    try {
-      await adminAuth.verifySessionCookie(token, true);
-    } catch (error) {
+    const uid = await getUserUid(request);
+    if (!uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -51,14 +46,8 @@ export async function POST(request: Request) {
     // Note: we accept an optional `id` because the front-end may generate one
     // for optimistic UI / offline scenarios.  Keeping that id avoids duplicates
     // when the page is reloaded before the server acknowledges the write.
-    const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    let uid;
-    try {
-      ({ uid } = await adminAuth.verifySessionCookie(token, true));
-    } catch (error) {
+    const uid = await getUserUid(request);
+    if (!uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const data = (await request.json()) as CreateItemPayload;

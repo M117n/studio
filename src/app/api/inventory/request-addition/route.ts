@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, adminAuth } from '@/lib/firebaseAdmin';
+import { db } from '@/lib/firebaseAdmin';
+import { getUserUid } from '@/lib/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export const runtime = 'nodejs';
@@ -7,14 +8,10 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     // 1. Get session cookie and verify authentication
-    const sessionCookie = req.cookies.get('session')?.value;
-    if (!sessionCookie) {
+    const uid = await getUserUid(req);
+    if (!uid) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-
-    // 2. Verify the session cookie and get the user
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const uid = decodedClaims.uid;
 
     // 3. Parse the request body
     const body = await req.json();

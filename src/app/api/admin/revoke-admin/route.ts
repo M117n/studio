@@ -1,5 +1,6 @@
 import { NextResponse, NextRequest } from "next/server";
 import { adminAuth, db } from "@/lib/firebaseAdmin";
+import { getUserUid } from '@/lib/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export const runtime = "nodejs";
@@ -14,13 +15,10 @@ export async function POST(req: NextRequest) {
 
   try {
     // 1. Verify session cookie and get caller's UID
-    const sessionCookie = req.cookies.get("session")?.value;
-    if (!sessionCookie) {
+    const callerUid = await getUserUid(req);
+    if (!callerUid) {
       return NextResponse.json({ error: "Unauthorized: No session cookie" }, { status: 401 });
     }
-
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const callerUid = decodedToken.uid;
 
     // 2. Check if the caller is the Master Admin
     if (callerUid !== masterAdminUid) {

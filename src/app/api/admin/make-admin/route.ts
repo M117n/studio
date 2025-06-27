@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, adminAuth } from '@/lib/firebaseAdmin';
+import { getUserUid } from '@/lib/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 
 // This endpoint should only be accessible to super administrators
 export async function POST(request: NextRequest) {
   try {
     // Get session cookie for authorization
-    const sessionCookie = request.cookies.get('session')?.value;
-    
-    if (!sessionCookie) {
+    const requestingUserUid = await getUserUid(request);
+    if (!requestingUserUid) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
-
-    // Verify session and user identity
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const requestingUserUid = decodedClaims.uid;
     
     // Security check: Verify that the requesting user is THE Master Admin
     const masterAdminEnvUid = process.env.MASTER_ADMIN_UID;
