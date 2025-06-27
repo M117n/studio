@@ -1,21 +1,24 @@
 import { NextResponse, NextRequest } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
+import { getUserUid } from '@/lib/auth';
 
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get("session")?.value ?? "";
+  const uid = await getUserUid(req);
   try {
-    const decoded = await adminAuth.verifySessionCookie(token, true);
+    if (!uid) throw new Error('unauthenticated');
+    const decoded = await adminAuth.getUser(uid);
     // Check for the 'admin' custom claim
-    const isAdmin = decoded.admin === true;
+    const customClaims = decoded.customClaims || {};
+    const isAdmin = customClaims.admin === true;
     const userRole = isAdmin ? "admin" : "user";
 
     return NextResponse.json({
       uid: decoded.uid,
       email: decoded.email,
-      name: decoded.name || decoded.email, // Fallback for name
-      picture: decoded.picture, // Handle if picture can be undefined
+      name: decoded.displayName || decoded.email,
+      picture: decoded.photoURL,
       role: userRole,
     });
   } catch (error) { // Added error parameter to log it

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, adminAuth } from '@/lib/firebaseAdmin';
+import { db } from '@/lib/firebaseAdmin';
+import { getUserUid } from '@/lib/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { InventoryItemData } from '@/types/inventory';
 import type { ChangeLogEntry } from '@/types/changeLog';
@@ -19,14 +20,9 @@ export async function GET(
 ) {
   try {
     const { id } = await params; // <- await añadido
-    
-    const token = req.cookies.get('session')?.value;
-    if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    try {
-      await adminAuth.verifySessionCookie(token, true);
-    } catch (error) {
+
+    const uid = await getUserUid(req);
+    if (!uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -55,15 +51,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params; // <- await añadido
-    
-    const token = req.cookies.get('session')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    let uid: string;
-    try {
-      ({ uid } = await adminAuth.verifySessionCookie(token, true));
-    } catch (err) {
+
+    const uid = await getUserUid(req);
+    if (!uid) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -152,18 +142,9 @@ export async function DELETE(
     const { id } = await params; // <- await añadido
     console.log('DELETE request started for item:', id);
     
-    const token = req.cookies.get('session')?.value;
-    if (!token) {
+    const uid = await getUserUid(req);
+    if (!uid) {
       console.log('No token found in cookies');
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    
-    let uid: string;
-    try {
-      ({ uid } = await adminAuth.verifySessionCookie(token, true));
-      console.log('Token verified, uid:', uid);
-    } catch (err) {
-      console.error('Token verification failed:', err);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   

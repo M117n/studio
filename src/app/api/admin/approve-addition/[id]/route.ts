@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, adminAuth } from '@/lib/firebaseAdmin';
+import { getUserUid } from '@/lib/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { InventoryItem, InventoryItemData, Unit, SubCategory, Category, isValidCategory, isValidSubCategory, isValidUnit } from '@/types/inventory';
 import { AdditionRequestDoc } from '@/types/admin';
@@ -20,17 +21,12 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const { id: requestId } = params;
-  const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
-
-  if (!token) {
+  const adminUid = await getUserUid(request);
+  if (!adminUid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-
-  let adminUid;
-  let adminName;
+  let adminName: string;
   try {
-    const decodedToken = await adminAuth.verifySessionCookie(token, true);
-    adminUid = decodedToken.uid;
     const adminUser = await adminAuth.getUser(adminUid);
     adminName = adminUser.displayName || adminUser.email || 'Admin';
   } catch (error) {

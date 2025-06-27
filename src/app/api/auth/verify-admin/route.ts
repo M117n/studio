@@ -1,18 +1,13 @@
 import { NextRequest } from 'next/server';
 import { adminAuth, db } from '@/lib/firebaseAdmin';
+import { getUserUid } from '@/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get session cookie
-    const sessionCookie = request.cookies.get('session')?.value;
-    
-    if (!sessionCookie) {
+    const uid = await getUserUid(request);
+    if (!uid) {
       return Response.json({ error: 'No session cookie provided' }, { status: 401 });
     }
-
-    // Verify session
-    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie);
-    const uid = decodedClaims.uid;
 
     // Get user document from Firestore to check role
     const userDoc = await db.collection('users').doc(uid).get();
