@@ -70,13 +70,13 @@ const AdminAdditionRequestsPage = () => {
   const handleApproveRequest = async (requestId: string) => {
     setProcessing(prev => ({ ...prev, [requestId]: true }));
     try {
-      const response = await fetch(`/api/admin/approve-addition/${requestId}`, {
+      const response = await fetch(`/api/admin/approve-addition`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // Session cookie should be automatically sent by the browser
         },
-      });
+        body: JSON.stringify({ requestId }),
+      });      
 
       const result = await response.json();
 
