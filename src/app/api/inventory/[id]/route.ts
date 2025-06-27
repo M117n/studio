@@ -54,7 +54,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }, // <- Promise añadida
 ) {
   try {
-    const { id } = await params; // <- await añadido
+    const { id } = await params;
     
     const token = req.cookies.get('session')?.value;
     if (!token) {
@@ -76,6 +76,10 @@ export async function PATCH(
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "Invalid patch data", details: "Patch data cannot be empty." }, { status: 400 });
+    }
+    
+    if (patch.name && typeof patch.name === 'string') {
+      patch.normalizedName = patch.name.trim().toLowerCase();
     }
 
     for (const key in patch) {
@@ -146,10 +150,10 @@ export async function PATCH(
 /* ------------------ DELETE /api/inventory/[id] ----------------- */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }, // <- Promise añadida
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await params; // <- await añadido
+    const { id } = await params;
     console.log('DELETE request started for item:', id);
     
     const token = req.cookies.get('session')?.value;

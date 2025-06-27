@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   runTransaction,
   DocumentReference,
+  getDocs,
 } from 'firebase/firestore';
 import { auth } from '@/lib/firebaseClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -346,115 +347,171 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
   };
 
   // Function to handle approving an item addition request
-  const handleApproveAdditionRequest = async (request: AdditionRequest) => {
-    if (!user?.uid) {
-      toast({ title: "Not Authenticated", description: "You must be logged in as an admin to approve requests.", variant: "destructive" });
-      return;
+// Function to handle approving an item addition request
+const handleApproveAdditionRequest = async (request: AdditionRequest) => {
+  if (!user?.uid) {
+    toast({ title: "Not Authenticated", description: "You must be logged in as an admin to approve requests.", variant: "destructive" });
+    return;
+  }
+
+  const adminName = user.displayName || user.email || 'Admin User';
+  const adminId = user.uid;
+
+  const db = getFirestore(auth.app);
+  const requestDocRef = doc(db, 'additionRequests', request.id);
+
+  try {
+    // First, check for conflicts outside the transaction
+    const items = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
+    if (items.length === 0) {
+      throw new Error('No items found in request');
     }
 
-    const adminName = user.displayName || user.email || 'Admin User';
-    const adminId = user.uid;
-
-    const db = getFirestore(auth.app);
-    const requestDocRef = doc(db, 'additionRequests', request.id);
-
-    try {
-      await runTransaction(db, async (transaction) => {
-        // 1. Get the latest request data
-        const requestSnapshot = await transaction.get(requestDocRef);
-        if (!requestSnapshot.exists()) {
-          throw new Error("Request document not found!");
+    // Check for existing items with same name but different units
+    const inventoryCollectionRef = collection(db, 'inventory');
+    for (const item of items) {
+      const { name, unit } = item;
+      
+      // Query for existing items with the same name
+      const nameQuery = query(inventoryCollectionRef, where("name", "==", name));
+      const nameQuerySnapshot = await getDocs(nameQuery);
+      
+      if (!nameQuerySnapshot.empty) {
+        // Check if any existing item has a different unit
+        const conflictingDoc = nameQuerySnapshot.docs.find(doc => {
+          const existingItem = doc.data() as InventoryItem;
+          return existingItem.unit !== unit && !convertUnits(1, existingItem.unit, unit);
+        });
+        
+        if (conflictingDoc) {
+          const existingItem = conflictingDoc.data() as InventoryItem;
+          setConflict({
+            request,
+            item,
+            existingUnit: existingItem.unit,
+            existingDocId: conflictingDoc.id
+          });
+          return; // Stop here and let user resolve conflict
         }
-        const currentRequestData = requestSnapshot.data() as Omit<AdditionRequest, 'id'>;
-        if (currentRequestData.status !== 'pending') {
-          throw new Error(`Request is no longer pending (current status: ${currentRequestData.status}).`);
-        }
+      }
+    }
 
-        // 2. Add the new item(s) to inventory
-        const items = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
-        if (items.length === 0) {
-          throw new Error('No items found in request');
-        }
-        const inventoryCollectionRef = collection(db, 'inventory');
-        for (const item of items) {
-          const { name, category, subcategory, quantityToAdd, unit } = item;
-          const existingItemRef = doc(inventoryCollectionRef, name);
-          const existingItemSnap = await transaction.get(existingItemRef);
+    // No conflicts found, proceed with transaction
+    await runTransaction(db, async (transaction) => {
+      // 1. Get the latest request data
+      const requestSnapshot = await transaction.get(requestDocRef);
+      if (!requestSnapshot.exists()) {
+        throw new Error("Request document not found!");
+      }
+      const currentRequestData = requestSnapshot.data() as Omit<AdditionRequest, 'id'>;
+      if (currentRequestData.status !== 'pending') {
+        throw new Error(`Request is no longer pending (current status: ${currentRequestData.status}).`);
+      }
 
-          if (existingItemSnap.exists()) {
-            const existingItemData = existingItemSnap.data() as InventoryItem;
-            if (existingItemData.unit !== unit && NON_CONVERTIBLE_UNITS.includes(unit) && NON_CONVERTIBLE_UNITS.includes(existingItemData.unit)) {
-              setConflict({
-                request,
-                item,
-                existingUnit: existingItemData.unit,
-                existingDocId: existingItemSnap.id,
-              });
-              return;
-            }
-            const convertedQuantity = convertUnits(quantityToAdd, unit, existingItemData.unit);
-            if (convertedQuantity === null) {
-              throw new Error(`Cannot convert units for item ${name} from ${unit} to ${existingItemData.unit}`);
-            }
-            transaction.update(existingItemRef, { quantity: existingItemData.quantity + convertedQuantity });
-          } else {
-            const newItemRef = doc(inventoryCollectionRef);
-            transaction.set(newItemRef, {
-              name,
-              category,
-              subcategory,
-              quantity: quantityToAdd,
-              unit,
+      // 2. Add the new item(s) to inventory
+      for (const item of items) {
+        const { name, category, subcategory, quantityToAdd, unit } = item;
+        
+        // Query for an existing item with the same name and unit (or convertible unit)
+        const nameQuery = query(inventoryCollectionRef, where("name", "==", name));
+        const nameQuerySnapshot = await getDocs(nameQuery);
+        
+        let existingDoc = null;
+        if (!nameQuerySnapshot.empty) {
+          // Look for exact unit match first
+          existingDoc = nameQuerySnapshot.docs.find(doc => {
+            const existingItem = doc.data() as InventoryItem;
+            return existingItem.unit === unit;
+          });
+          
+          // If no exact match, look for convertible unit
+          if (!existingDoc) {
+            existingDoc = nameQuerySnapshot.docs.find(doc => {
+              const existingItem = doc.data() as InventoryItem;
+              return convertUnits(1, unit, existingItem.unit) !== null;
             });
           }
         }
+        
+        if (existingDoc) {
+          // Item exists, update it
+          const existingItemData = existingDoc.data() as InventoryItem;
+          let quantityToAddConverted = quantityToAdd;
+          
+          // Convert units if necessary
+          if (existingItemData.unit !== unit) {
+            const converted = convertUnits(quantityToAdd, unit, existingItemData.unit);
+            if (converted === null) {
+              throw new Error(`Cannot convert ${unit} to ${existingItemData.unit} for item ${name}`);
+            }
+            quantityToAddConverted = converted;
+          }
+          
+          const newQuantity = existingItemData.quantity + quantityToAddConverted;
+          transaction.update(existingDoc.ref, { 
+            quantity: newQuantity,
+            lastUpdated: serverTimestamp()
+          });
+        } else {
+          // Item does not exist, create it
+          const newItemRef = doc(inventoryCollectionRef);
+          transaction.set(newItemRef, {
+            name,
+            category,
+            subcategory,
+            quantity: quantityToAdd,
+            unit,
+            lastUpdated: serverTimestamp()
+          });
+        }
+      }
 
-        // 3. Update the addition request status and admin details
-        transaction.update(requestDocRef, {
-          status: 'approved',
-          adminId,
-          adminName,
-          processedTimestamp: serverTimestamp(),
-        });
-
-        // 4. Log the action
-        const actionLogCollection = collection(db, 'actionLogs');
-        const details = items.length === 1
-          ? { approvedItem: items[0], message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` }
-          : { approvedItems: items, message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` };
-        transaction.set(doc(actionLogCollection), {
-          actionType: 'approve_addition_request',
-          requestId: request.id,
-          userId: request.userId,
-          userName: request.userName,
-          adminId,
-          adminName,
-          timestamp: serverTimestamp(),
-          details,
-        });
-
-        // 5. Create notification for the user
-        const notificationsCollection = collection(db, 'notifications');
-        const approvalMessage = items.length === 1
-          ? `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items[0].name} has been approved. Inventory updated.`
-          : `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items.length} items has been approved. Inventory updated.`;
-        transaction.set(doc(notificationsCollection), {
-          userId: request.userId,
-          type: 'request_approved',
-          message: approvalMessage,
-          requestId: request.id,
-          timestamp: serverTimestamp(),
-          isRead: false,
-          link: `/user/requests/${request.id}`
-        });
+      // 3. Update the addition request status and admin details
+      transaction.update(requestDocRef, {
+        status: 'approved',
+        adminId,
+        adminName,
+        processedTimestamp: serverTimestamp(),
       });
 
-      toast({ title: 'Request Approved', description: `Addition request ${request.id.substring(0,6)}... processed, inventory updated, and user notified.` });
-    } catch (error: any) {
-      console.error("Error approving addition request: ", error);
-      toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
-    }
-  };
+      // 4. Log the action
+      const actionLogCollection = collection(db, 'actionLogs');
+      const details = items.length === 1
+        ? { approvedItem: items[0], message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` }
+        : { approvedItems: items, message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` };
+      transaction.set(doc(actionLogCollection), {
+        actionType: 'approve_addition_request',
+        requestId: request.id,
+        userId: request.userId,
+        userName: request.userName,
+        adminId,
+        adminName,
+        timestamp: serverTimestamp(),
+        details,
+      });
+
+      // 5. Create notification for the user
+      const notificationsCollection = collection(db, 'notifications');
+      const approvalMessage = items.length === 1
+        ? `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items[0].name} has been approved. Inventory updated.`
+        : `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items.length} items has been approved. Inventory updated.`;
+      transaction.set(doc(notificationsCollection), {
+        userId: request.userId,
+        type: 'request_approved',
+        message: approvalMessage,
+        requestId: request.id,
+        timestamp: serverTimestamp(),
+        isRead: false,
+        link: `/user/requests/${request.id}`
+      });
+    });
+
+    toast({ title: 'Request Approved', description: `Addition request ${request.id.substring(0,6)}... processed, inventory updated, and user notified.` });
+  } catch (error: any) {
+    console.error("Error approving addition request: ", error);
+    toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
+  }
+};
 
   const handleConflictResolution = async (unit: Unit) => {
     if (!user?.uid) {

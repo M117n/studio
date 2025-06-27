@@ -15,11 +15,10 @@ const getMainCategory = (sub: SubCategory): Category => {
   return Category.OTHER;
 };
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const { id: requestId } = params;
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { requestId } = body;
+
   const token = request.headers.get("cookie")?.match(/session=([^;]+)/)?.[1];
 
   if (!token) {
@@ -38,7 +37,7 @@ export async function POST(
   }
 
   const requestRef = db.collection('additionRequests').doc(requestId);
-
+  console.log("✅ POST handler called with requestId:", requestId);
   try {
     const result = await db.runTransaction(async (transaction) => {
       const requestDoc = await transaction.get(requestRef);
@@ -57,7 +56,11 @@ export async function POST(
       const normalizedName = name.trim().toLowerCase();
 
       const inventoryRef = db.collection('inventory');
-      const query = inventoryRef.where('normalizedName', '==', normalizedName).limit(1);
+      console.log("Searching for:", normalizedName, unit);
+      const query = inventoryRef
+      .where('normalizedName', '==', normalizedName)
+      .where('unit', '==', unit)
+      .limit(1);    
       const snapshot = await transaction.get(query);
 
       let itemId: string;
@@ -97,6 +100,7 @@ export async function POST(
           subcategory: subcategory as SubCategory,
           lastUpdated: FieldValue.serverTimestamp() as AppTimestamp,
         };
+        console.log("🧾 newItemData:", JSON.stringify(newItemData, null, 2));
         transaction.set(newItemRef, newItemData);
         finalItemData = { ...newItemData, id: itemId };
       }

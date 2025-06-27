@@ -13,6 +13,16 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "inventory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "normalizedName",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
