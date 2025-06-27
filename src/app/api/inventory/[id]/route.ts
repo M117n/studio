@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/firebaseAdmin';
-import { getUserUid } from '@/lib/auth';
+import { db, adminAuth } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import type { InventoryItemData } from '@/types/inventory';
 import type { ChangeLogEntry } from '@/types/changeLog';
@@ -20,9 +19,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params; // <- await añadido
-
-    const uid = await getUserUid(req);
-    if (!uid) {
+    
+    const token = req.cookies.get('session')?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    try {
+      await adminAuth.verifySessionCookie(token, true);
+    } catch (error) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -50,10 +54,16 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }, // <- Promise añadida
 ) {
   try {
-    const { id } = await params; // <- await añadido
-
-    const uid = await getUserUid(req);
-    if (!uid) {
+    const { id } = await params;
+    
+    const token = req.cookies.get('session')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    let uid: string;
+    try {
+      ({ uid } = await adminAuth.verifySessionCookie(token, true));
+    } catch (err) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -66,6 +76,10 @@ export async function PATCH(
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "Invalid patch data", details: "Patch data cannot be empty." }, { status: 400 });
+    }
+    
+    if (patch.name && typeof patch.name === 'string') {
+      patch.normalizedName = patch.name.trim().toLowerCase();
     }
 
     for (const key in patch) {
@@ -136,15 +150,24 @@ export async function PATCH(
 /* ------------------ DELETE /api/inventory/[id] ----------------- */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }, // <- Promise añadida
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const { id } = await params; // <- await añadido
+    const { id } = await params;
     console.log('DELETE request started for item:', id);
     
-    const uid = await getUserUid(req);
-    if (!uid) {
+    const token = req.cookies.get('session')?.value;
+    if (!token) {
       console.log('No token found in cookies');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    
+    let uid: string;
+    try {
+      ({ uid } = await adminAuth.verifySessionCookie(token, true));
+      console.log('Token verified, uid:', uid);
+    } catch (err) {
+      console.error('Token verification failed:', err);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   

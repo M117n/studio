@@ -91,7 +91,14 @@ export async function POST(request: Request) {
       ? db.collection("inventory").doc(id)
       : db.collection("inventory").doc();
 
-    const newItem: InventoryItemData = { name, quantity, unit, category, subcategory };
+    const newItem: InventoryItemData = { 
+      name, 
+      normalizedName: name.trim().toLowerCase(), 
+      quantity, 
+      unit, 
+      category, 
+      subcategory 
+    };
 
     await docRef.set(newItem);
 
