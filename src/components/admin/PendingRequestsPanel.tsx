@@ -220,7 +220,13 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
           throw new Error(`Request is no longer pending (current status: ${currentRequestData.status}).`);
         }
 
-        // 2. Update inventory items
+        // 2. Read all inventory items first to satisfy Firestore transaction rules
+        const inventorySnapshots: {
+          ref: DocumentReference<InventoryItem>;
+          snapshot: Awaited<ReturnType<typeof transaction.get>>;
+          item: RequestedItemDetail;
+        }[] = [];
+
         for (const itemToUpdate of request.requestedItems) {
           const inventoryItemRef = doc(db, 'inventory', itemToUpdate.itemId) as DocumentReference<InventoryItem>;
           const inventoryItemSnap = await transaction.get(inventoryItemRef);
@@ -229,16 +235,21 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
             throw new Error(`Inventory item ${itemToUpdate.name} (ID: ${itemToUpdate.itemId}) not found!`);
           }
 
-          const currentQuantity = inventoryItemSnap.data()?.quantity || 0;
-          const newQuantity = currentQuantity - itemToUpdate.quantityToRemove;
-
-          if (newQuantity < 0) {
-            throw new Error(`Insufficient stock for ${itemToUpdate.name}. Requested: ${itemToUpdate.quantityToRemove}, Available: ${currentQuantity}.`);
-          }
-          transaction.update(inventoryItemRef, { quantity: newQuantity });
+          inventorySnapshots.push({ ref: inventoryItemRef, snapshot: inventoryItemSnap, item: itemToUpdate });
         }
 
-        // 3. Update the removal request status and admin details
+        // 3. Perform inventory updates after all reads have completed
+        for (const { ref, snapshot, item } of inventorySnapshots) {
+          const currentQuantity = snapshot.data()?.quantity || 0;
+          const newQuantity = currentQuantity - item.quantityToRemove;
+
+          if (newQuantity < 0) {
+            throw new Error(`Insufficient stock for ${item.name}. Requested: ${item.quantityToRemove}, Available: ${currentQuantity}.`);
+          }
+          transaction.update(ref, { quantity: newQuantity });
+        }
+
+        // 4. Update the removal request status and admin details
         transaction.update(requestDocRef, {
           status: 'approved',
           adminId,
@@ -246,7 +257,7 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
           processedTimestamp: serverTimestamp(),
         });
 
-        // 4. Log the action
+        // 5. Log the action
         const actionLogCollection = collection(db, 'actionLogs');
         transaction.set(doc(actionLogCollection), {
           actionType: 'approve_removal_request',
@@ -262,7 +273,7 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
           }
         });
 
-        // 5. Create notification for the user
+        // 6. Create notification for the user
         const notificationsCollection = collection(db, 'notifications');
         transaction.set(doc(notificationsCollection), { 
           userId: request.userId,
