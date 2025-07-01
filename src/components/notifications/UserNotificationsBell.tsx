@@ -38,7 +38,7 @@ interface Notification {
   type: 'request_approved' | 'request_rejected';
   message: string;
   requestId: string;
-  timestamp: Timestamp;
+  timestamp: Timestamp | null;
   isRead: boolean;
   adminNotes?: string;
   approvedItems?: { name: string; quantity: number; unit: string }[];
@@ -136,7 +136,11 @@ const UserNotificationsBell = () => {
           count++;
         }
       });
-      fetchedNotifications.sort((a, b) => b.timestamp.toMillis() - a.timestamp.toMillis());
+      fetchedNotifications.sort((a, b) => {
+        const bTime = b.timestamp && typeof b.timestamp.toMillis === 'function' ? b.timestamp.toMillis() : 0;
+        const aTime = a.timestamp && typeof a.timestamp.toMillis === 'function' ? a.timestamp.toMillis() : 0;
+        return bTime - aTime;
+      });
       setNotifications(fetchedNotifications);
       setUnreadCount(count);
       setIsLoading(false);
@@ -345,7 +349,12 @@ const UserNotificationsBell = () => {
                         {notif._friendlyMessageCache || generateFriendlyMessage(notif.message, notif.type, undefined)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(notif.timestamp.toDate()).toLocaleDateString()} {new Date(notif.timestamp.toDate()).toLocaleTimeString()}
+                        {(() => {
+                          const date = notif.timestamp && typeof notif.timestamp.toDate === 'function'
+                            ? notif.timestamp.toDate()
+                            : null;
+                          return date ? `${date.toLocaleDateString()} ${date.toLocaleTimeString()}` : 'Unknown date';
+                        })()}
                       </p>
                       <Button 
                         variant="link" 
