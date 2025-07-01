@@ -18,7 +18,9 @@
     "build:prod": "cross-env NODE_ENV=production next build",
     "start:prod": "cross-env NODE_ENV=production next start -p 9002",
     "build:dev": "cross-env NODE_ENV=development next build",
-    "start:dev": "cross-env NODE_ENV=development next start -p 9002"
+    "start:dev": "cross-env NODE_ENV=development next start -p 9002",
+    "script:backfill:dev": "node -r dotenv/config ./node_modules/ts-node/dist/bin.js --project tsconfig.json ./backfillScript.ts development",
+    "script:backfill:prod": "node -r dotenv/config ./node_modules/ts-node/dist/bin.js --project tsconfig.json ./backfillScript.ts production"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.0.4",
@@ -50,7 +52,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "firebase": "^11.9.1",
     "firebase-admin": "^13.3.0",
     "firebase-functions": "^6.3.2",

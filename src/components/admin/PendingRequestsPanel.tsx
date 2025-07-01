@@ -13,7 +13,6 @@ import {
   serverTimestamp,
   runTransaction,
   DocumentReference,
-  getDocs,
 } from 'firebase/firestore';
 import { auth } from '@/lib/firebaseClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import type { InventoryItem, Unit } from '@/types/inventory';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { convertUnits, NON_CONVERTIBLE_UNITS } from '@/lib/unitConversion';
 
 // Types for requests
 interface RequestedItemDetail {
@@ -346,172 +344,55 @@ export function PendingRequestsPanel({ onClose }: PendingRequestsPanelProps) {
     }
   };
 
-  // Function to handle approving an item addition request
-// Function to handle approving an item addition request
-const handleApproveAdditionRequest = async (request: AdditionRequest) => {
-  if (!user?.uid) {
-    toast({ title: "Not Authenticated", description: "You must be logged in as an admin to approve requests.", variant: "destructive" });
-    return;
-  }
-
-  const adminName = user.displayName || user.email || 'Admin User';
-  const adminId = user.uid;
-
-  const db = getFirestore(auth.app);
-  const requestDocRef = doc(db, 'additionRequests', request.id);
-
-  try {
-    // First, check for conflicts outside the transaction
-    const items = request.requestedItems ?? (request.requestedItem ? [request.requestedItem] : []);
-    if (items.length === 0) {
-      throw new Error('No items found in request');
+  // Function to handle approving an item addition request using the API endpoint
+  const handleApproveAdditionRequest = async (request: AdditionRequest) => {
+    if (!user?.uid) {
+      toast({ title: "Not Authenticated", description: "You must be logged in as an admin to approve requests.", variant: "destructive" });
+      return;
     }
 
-    // Check for existing items with same name but different units
-    const inventoryCollectionRef = collection(db, 'inventory');
-    for (const item of items) {
-      const { name, unit } = item;
-      
-      // Query for existing items with the same name
-      const nameQuery = query(inventoryCollectionRef, where("name", "==", name));
-      const nameQuerySnapshot = await getDocs(nameQuery);
-      
-      if (!nameQuerySnapshot.empty) {
-        // Check if any existing item has a different unit
-        const conflictingDoc = nameQuerySnapshot.docs.find(doc => {
-          const existingItem = doc.data() as InventoryItem;
-          return existingItem.unit !== unit && !convertUnits(1, existingItem.unit, unit);
+    try {
+      const response = await fetch(`/api/admin/approve-addition/${request.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          requestId: request.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.status === 409) {
+        // Unit conflict detected
+        const conflictDetails = data.conflictDetails;
+        setConflict({
+          request: conflictDetails.request,
+          item: conflictDetails.item,
+          existingUnit: conflictDetails.existingUnit,
+          existingDocId: conflictDetails.existingDocId
         });
-        
-        if (conflictingDoc) {
-          const existingItem = conflictingDoc.data() as InventoryItem;
-          setConflict({
-            request,
-            item,
-            existingUnit: existingItem.unit,
-            existingDocId: conflictingDoc.id
-          });
-          return; // Stop here and let user resolve conflict
-        }
+        return;
       }
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve request');
+      }
+
+      toast({ 
+        title: 'Request Approved', 
+        description: `Addition request ${request.id.substring(0,6)}... processed, inventory updated, and user notified.` 
+      });
+    } catch (error: any) {
+      console.error("Error approving addition request: ", error);
+      toast({ 
+        title: "Approval Error", 
+        description: error.message || "Could not approve request.", 
+        variant: "destructive" 
+      });
     }
-
-    // No conflicts found, proceed with transaction
-    await runTransaction(db, async (transaction) => {
-      // 1. Get the latest request data
-      const requestSnapshot = await transaction.get(requestDocRef);
-      if (!requestSnapshot.exists()) {
-        throw new Error("Request document not found!");
-      }
-      const currentRequestData = requestSnapshot.data() as Omit<AdditionRequest, 'id'>;
-      if (currentRequestData.status !== 'pending') {
-        throw new Error(`Request is no longer pending (current status: ${currentRequestData.status}).`);
-      }
-
-      // 2. Add the new item(s) to inventory
-      for (const item of items) {
-        const { name, category, subcategory, quantityToAdd, unit } = item;
-        
-        // Query for an existing item with the same name and unit (or convertible unit)
-        const nameQuery = query(inventoryCollectionRef, where("name", "==", name));
-        const nameQuerySnapshot = await getDocs(nameQuery);
-        
-        let existingDoc = null;
-        if (!nameQuerySnapshot.empty) {
-          // Look for exact unit match first
-          existingDoc = nameQuerySnapshot.docs.find(doc => {
-            const existingItem = doc.data() as InventoryItem;
-            return existingItem.unit === unit;
-          });
-          
-          // If no exact match, look for convertible unit
-          if (!existingDoc) {
-            existingDoc = nameQuerySnapshot.docs.find(doc => {
-              const existingItem = doc.data() as InventoryItem;
-              return convertUnits(1, unit, existingItem.unit) !== null;
-            });
-          }
-        }
-        
-        if (existingDoc) {
-          // Item exists, update it
-          const existingItemData = existingDoc.data() as InventoryItem;
-          let quantityToAddConverted = quantityToAdd;
-          
-          // Convert units if necessary
-          if (existingItemData.unit !== unit) {
-            const converted = convertUnits(quantityToAdd, unit, existingItemData.unit);
-            if (converted === null) {
-              throw new Error(`Cannot convert ${unit} to ${existingItemData.unit} for item ${name}`);
-            }
-            quantityToAddConverted = converted;
-          }
-          
-          const newQuantity = existingItemData.quantity + quantityToAddConverted;
-          transaction.update(existingDoc.ref, { 
-            quantity: newQuantity,
-            lastUpdated: serverTimestamp()
-          });
-        } else {
-          // Item does not exist, create it
-          const newItemRef = doc(inventoryCollectionRef);
-          transaction.set(newItemRef, {
-            name,
-            category,
-            subcategory,
-            quantity: quantityToAdd,
-            unit,
-            lastUpdated: serverTimestamp()
-          });
-        }
-      }
-
-      // 3. Update the addition request status and admin details
-      transaction.update(requestDocRef, {
-        status: 'approved',
-        adminId,
-        adminName,
-        processedTimestamp: serverTimestamp(),
-      });
-
-      // 4. Log the action
-      const actionLogCollection = collection(db, 'actionLogs');
-      const details = items.length === 1
-        ? { approvedItem: items[0], message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` }
-        : { approvedItems: items, message: `Admin ${adminName} approved item addition request ${request.id} from user ${request.userName}.` };
-      transaction.set(doc(actionLogCollection), {
-        actionType: 'approve_addition_request',
-        requestId: request.id,
-        userId: request.userId,
-        userName: request.userName,
-        adminId,
-        adminName,
-        timestamp: serverTimestamp(),
-        details,
-      });
-
-      // 5. Create notification for the user
-      const notificationsCollection = collection(db, 'notifications');
-      const approvalMessage = items.length === 1
-        ? `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items[0].name} has been approved. Inventory updated.`
-        : `Your item addition request (ID: ${request.id.substring(0,6)}...) for ${items.length} items has been approved. Inventory updated.`;
-      transaction.set(doc(notificationsCollection), {
-        userId: request.userId,
-        type: 'request_approved',
-        message: approvalMessage,
-        requestId: request.id,
-        timestamp: serverTimestamp(),
-        isRead: false,
-        link: `/user/requests/${request.id}`
-      });
-    });
-
-    toast({ title: 'Request Approved', description: `Addition request ${request.id.substring(0,6)}... processed, inventory updated, and user notified.` });
-  } catch (error: any) {
-    console.error("Error approving addition request: ", error);
-    toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
-  }
-};
+  };
 
   const handleConflictResolution = async (unit: Unit) => {
     if (!user?.uid) {
@@ -525,88 +406,37 @@ const handleApproveAdditionRequest = async (request: AdditionRequest) => {
       return;
     }
 
-    const adminName = user.displayName || user.email || 'Admin User';
-    const adminId = user.uid;
-
-    const db = getFirestore(auth.app);
-    const requestDocRef = doc(db, 'additionRequests', conflict.request.id);
-    const existingItemRef = doc(db, 'inventory', conflict.existingDocId);
-
     try {
-      await runTransaction(db, async (transaction) => {
-        // 1. Update the existing item's unit
-        transaction.update(existingItemRef, { unit });
-
-        // 2. Add the new item(s) to inventory
-        const items = conflict.request.requestedItems ?? (conflict.request.requestedItem ? [conflict.request.requestedItem] : []);
-        if (items.length === 0) {
-          throw new Error('No items found in request');
-        }
-        const inventoryCollectionRef = collection(db, 'inventory');
-        for (const item of items) {
-          const { name, category, subcategory, quantityToAdd } = item;
-          const existingItemSnap = await transaction.get(existingItemRef);
-
-          if (existingItemSnap.exists()) {
-            const existingItemData = existingItemSnap.data() as InventoryItem;
-            transaction.update(existingItemRef, { quantity: existingItemData.quantity + quantityToAdd });
-          } else {
-            const newItemRef = doc(inventoryCollectionRef);
-            transaction.set(newItemRef, {
-              name,
-              category,
-              subcategory,
-              quantity: quantityToAdd,
-              unit,
-            });
-          }
-        }
-
-        // 3. Update the addition request status and admin details
-        transaction.update(requestDocRef, {
-          status: 'approved',
-          adminId,
-          adminName,
-          processedTimestamp: serverTimestamp(),
-        });
-
-        // 4. Log the action
-        const actionLogCollection = collection(db, 'actionLogs');
-        const details = items.length === 1
-          ? { approvedItem: items[0], message: `Admin ${adminName} approved item addition request ${conflict.request.id} from user ${conflict.request.userName}.` }
-          : { approvedItems: items, message: `Admin ${adminName} approved item addition request ${conflict.request.id} from user ${conflict.request.userName}.` };
-        transaction.set(doc(actionLogCollection), {
-          actionType: 'approve_addition_request',
+      const response = await fetch(`/api/admin/approve-addition/${conflict.request.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           requestId: conflict.request.id,
-          userId: conflict.request.userId,
-          userName: conflict.request.userName,
-          adminId,
-          adminName,
-          timestamp: serverTimestamp(),
-          details,
-        });
-
-        // 5. Create notification for the user
-        const notificationsCollection = collection(db, 'notifications');
-        const approvalMessage = items.length === 1
-          ? `Your item addition request (ID: ${conflict.request.id.substring(0,6)}...) for ${items[0].name} has been approved. Inventory updated.`
-          : `Your item addition request (ID: ${conflict.request.id.substring(0,6)}...) for ${items.length} items has been approved. Inventory updated.`;
-        transaction.set(doc(notificationsCollection), {
-          userId: conflict.request.userId,
-          type: 'request_approved',
-          message: approvalMessage,
-          requestId: conflict.request.id,
-          timestamp: serverTimestamp(),
-          isRead: false,
-          link: `/user/requests/${conflict.request.id}`
-        });
+          resolveConflict: true,
+          resolvedUnit: unit,
+        }),
       });
 
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve request with conflict resolution');
+      }
+
       setConflict(null);
-      toast({ title: 'Request Approved', description: `Addition request ${conflict.request.id.substring(0,6)}... processed, inventory updated, and user notified.` });
+      toast({ 
+        title: 'Request Approved', 
+        description: `Addition request ${conflict.request.id.substring(0,6)}... processed, inventory updated, and user notified.` 
+      });
     } catch (error: any) {
-      console.error("Error approving addition request: ", error);
-      toast({ title: "Approval Error", description: error.message || "Could not approve request.", variant: "destructive" });
+      console.error("Error approving addition request with conflict resolution: ", error);
+      toast({ 
+        title: "Approval Error", 
+        description: error.message || "Could not approve request.", 
+        variant: "destructive" 
+      });
     }
   };
 

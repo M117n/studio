@@ -23,6 +23,12 @@
       "@/*": ["src/*"]
     }
   },
+  "ts-node": {
+    // Forzar la compilación a CommonJS para la ejecución de scripts
+    "compilerOptions": {
+      "module": "CommonJS"
+    }
+  },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "middleware.ts.disabled"],
   "exclude": ["node_modules"]
 }
