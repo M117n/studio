@@ -49,7 +49,7 @@ export function SubtractItemsComponent({ inventory, userId, userName }: Subtract
   const handleConfirmQuantity = () => {
     if (!selectedForQuantity) return;
 
-    const quantityNum = parseInt(currentQuantityInput, 10);
+    const quantityNum = parseFloat(currentQuantityInput);
 
     if (isNaN(quantityNum) || quantityNum <= 0) {
       toast({
@@ -204,12 +204,13 @@ export function SubtractItemsComponent({ inventory, userId, userName }: Subtract
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="py-2">
-                  <Input 
+                  <Input
                     type="number"
+                    step="any"
                     placeholder={`Quantity (max ${selectedForQuantity.quantity})`}
                     value={currentQuantityInput}
                     onChange={(e) => setCurrentQuantityInput(e.target.value)}
-                    min="1"
+                    min="0"
                     max={selectedForQuantity.quantity}
                     autoFocus
                   />
