@@ -122,7 +122,7 @@ export function AddMultipleItemsRequestComponent({
     let verifiedName = userName;
 
     try {
-      const authResp = await fetch('/auth/me');
+      const authResp = await fetch('/api/auth/me');
       if (authResp.ok) {
         const authData = await authResp.json();
         verifiedUid = authData.uid;
