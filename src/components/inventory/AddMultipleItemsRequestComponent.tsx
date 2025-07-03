@@ -118,8 +118,27 @@ export function AddMultipleItemsRequestComponent({
   };
 
   const handleSubmitRequest = async () => {
-    if (!userId || !userName) {
-      toast({ title: "Auth Error", description: "User not authenticated", variant: "destructive" });
+    let verifiedUid = userId;
+    let verifiedName = userName;
+
+    try {
+      const authResp = await fetch('/auth/me');
+      if (authResp.ok) {
+        const authData = await authResp.json();
+        verifiedUid = authData.uid;
+        verifiedName = authData.name;
+      } else {
+        toast({ title: 'Auth Error', description: 'User not authenticated', variant: 'destructive' });
+        return;
+      }
+    } catch (err) {
+      console.error('Error verifying session', err);
+      toast({ title: 'Auth Error', description: 'Could not verify session', variant: 'destructive' });
+      return;
+    }
+
+    if (!verifiedUid || !verifiedName) {
+      toast({ title: 'Auth Error', description: 'User not authenticated', variant: 'destructive' });
       return;
     }
     if (itemsToRequest.size === 0) {
@@ -130,8 +149,8 @@ export function AddMultipleItemsRequestComponent({
     setIsSubmitting(true);
     try {
       const body = {
-        userId,
-        userName,
+        userId: verifiedUid,
+        userName: verifiedName,
         requestedItems: Array.from(itemsToRequest.values()).map(({ id, ...rest }) => rest),
       };
       const resp = await fetch("/api/inventory/request-addition", {
